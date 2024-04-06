@@ -1,0 +1,19 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+
+
+
+\begin{document}
+\input{tables.tex}
+
+You can reference tables \ref{table:differencesinmeans} and \ref{table:summarytable} as expected.
+
+% if you used the only_tabular option, you can wrap it in a table in your main 
+% tex file.
+\begin{table}
+    \centering
+    \input{tabular_table.tex}
+\end{table}
+
+\end{document}

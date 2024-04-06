@@ -31,8 +31,6 @@ class Table(ABC):
         self._column_labels = dict()
         self._multicolumns = []
         self._formatters = dict()
-        # self.index_formatter = False
-        # self.column_formatter = False
         self.notes = []
         self.custom_lines = defaultdict(list)
         self.custom_tex_lines = defaultdict(list)
@@ -152,7 +150,7 @@ class Table(ABC):
             _description_
         """
         assert isinstance(columndict, dict), "columndict must be a dictionary"
-        self._column_labels = columndict
+        self._column_labels.update(columndict)
 
     def rename_index(self, indexdict: dict) -> None:
         """
@@ -166,9 +164,9 @@ class Table(ABC):
             are the new labels.
         """
         assert isinstance(indexdict, dict), "indexdict must be a dictionary"
-        self._index_labels = indexdict
+        self._index_labels.update(indexdict)
 
-    # TODO: Add method for creating rows that span multiple columns
+    # TODO: Add method for creating index labels that span multiple rows
     def add_multicolumns(
         self,
         columns: Union[str, list[str]],
@@ -200,7 +198,6 @@ class Table(ABC):
         assert (
             sum(spans) == self.ncolumns
         ), "The sum of spans must equal the number of columns"
-        # TODO: Allow for the column to also cover the index?
         self._multicolumns.append((columns, spans))
 
     def custom_formatters(self, formatters: dict) -> None:
@@ -228,7 +225,7 @@ class Table(ABC):
         assert all(
             callable(f) for f in formatters.values()
         ), "Values in the formatters dict must be functions"
-        self._formatters = formatters
+        self._formatters.update(formatters)
 
     def add_note(self, note: str, alignment: str = "l", escape: bool = True) -> None:
         """
@@ -512,14 +509,6 @@ class GenericTable(Table):
         for _index, row in self.df.iterrows():
             _row = [self._index_labels.get(_index, _index)]
             for col, value in zip(row.index, row.values):
-                # if (_index, col) in self._formatters.keys():
-                #     formatter = self._formatters[(_index, col)]
-                # elif _index in self._formatters.keys():
-                #     formatter = self._formatters.get(_index, self._default_formatter)
-                # elif col in self._formatters.keys():
-                #     formatter = self._formatters.get(col, self._default_formatter)
-                # else:
-                #     formatter = self._default_formatter
                 formated_val = self._format_value(_index, col, value)
                 _row.append(formated_val)
             if not self.include_index:
@@ -577,7 +566,14 @@ class MeanDifferenceTable(Table):
         self.means = self.type_gdf[var_list].mean().T
         # add toal means column to means
         self.means["Overall Mean"] = df[var_list].mean()
-        self.sem = self.type_gdf[var_list].sem().T
+        total_sem = df[var_list].sem()
+        total_sem.name = "Overall Mean"
+        self.sem = pd.merge(
+            self.type_gdf[var_list].sem().T,
+            total_sem,
+            left_index=True,
+            right_index=True,
+        )
         self.diff_pairs = diff_pairs
         self.ndiffs = len(self.diff_pairs) if self.diff_pairs else 1
         self.t_stats = {}
@@ -668,28 +664,36 @@ class MeanDifferenceTable(Table):
                 self.remove_line(location="after-columns", index=-1)
             if self.show_stars:
                 self.remove_note(index=-1)
+                print("Note: Standard errors assume samples are drawn independently.")
             return output
 
         return wrapper
 
     @_render
-    def render_latex(self, buf=None, only_tabular=False) -> str | None:
-        return super().render_latex(buf, only_tabular)
+    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
+        return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, buf=None) -> str | None:
-
-        # self.add_multicolumns(["Means", "Differences"], [self.ngroups, self.ndiffs])
-        return super().render_html(buf)
+    def render_html(self, outfile=None) -> str | None:
+        return super().render_html(outfile)
 
     def _get_diffs(self):
+        # TODO: allow for standard errors caluclated under dependent samples
         def sig_test(grp0, grp1, col):
+            se_list = []
             for var in self.var_list:
                 _stat, pval = stats.ttest_ind(
                     grp0[var], grp1[var], equal_var=False, alternative=self.alternative
                 )
                 self.t_stats[f"{col}_{var}"] = _stat
                 self.pvalues[f"{col}_{var}"] = pval
+                s1 = grp0[var].std() ** 2
+                s2 = grp1[var].std() ** 2
+                n1 = grp0.shape[0]
+                n2 = grp1.shape[0]
+                se_list.append(np.sqrt(s1 / n1 + s2 / n2))
+
+            return pd.Series(se_list, index=self.var_list)
 
         if self.diff_pairs is None:
             self.means["Difference"] = (
@@ -697,16 +701,20 @@ class MeanDifferenceTable(Table):
             )
             grp0 = self.type_gdf.get_group(self.groups[0])
             grp1 = self.type_gdf.get_group(self.groups[1])
-            sig_test(grp0, grp1, "Difference")
+            ses = sig_test(grp0, grp1, "Difference")
+            ses.name = "Difference"
+            self.sem = self.sem.merge(ses, left_index=True, right_index=True)
         else:
             for pair in self.diff_pairs:
                 _col = f"{pair[0]} - {pair[1]}"
                 self.means[_col] = self.means[pair[0]] - self.means[pair[1]]
-                sig_test(
+                ses = sig_test(
                     self.type_gdf.get_group(pair[0]),
                     self.type_gdf.get_group(pair[1]),
                     _col,
                 )
+                ses.name = _col
+                self.sem = self.sem.merge(ses, left_index=True, right_index=True)
 
     def _create_rows(self):
         rows = []
@@ -714,14 +722,6 @@ class MeanDifferenceTable(Table):
             sem_row = [""]
             _row = [self._index_labels.get(_index, _index)]
             for col, value in zip(row.index, row.values):
-                # if (_index, col) in self._formatters.keys():
-                #     formatter = self._formatters[(_index, col)]
-                # elif _index in self._formatters.keys():
-                #     formated_val = self._formatters[_index](value)
-                # elif col in self._formatters.keys():
-                #     formated_val = self._formatters[col](value)
-                # else:
-                #     formated_val = self._default_formatter(value)
                 formated_val = self._format_value(_index, col, value)
                 if self.show_standard_errors:
                     try:
@@ -781,9 +781,6 @@ class ModelTable(Table):
         self.ncolumns = len(models)
         self.ci_attr = ci_attr
         self.columns = model_names
-        # self._param_names = param_names
-
-        # self.param_attr = param_attr
         self.std_err_attr = std_err_attr
         # extract data from each model
         self._model_dict = {}
@@ -923,106 +920,18 @@ class ModelTable(Table):
         return wrapper
 
     @_render
-    def render_latex(self, buf=None, only_tabular=False) -> str | None:
-        return super().render_latex(buf, only_tabular)
+    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
+        return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, buf=None) -> str | None:
-        return super().render_html(buf)
+    def render_html(self, outfile=None) -> str | None:
+        return super().render_html(outfile)
 
 
 class PanelTable:
     """
-    Merge two tables together
+    Merge two tables together. Not implemented yet
     """
 
     def __init__(self, panels: list[Table]):
         pass
-
-
-# def mean_diffs_table(
-#     df,
-#     group_var,
-#     var_list,
-#     index_names=None,
-#     columns_names=None,
-#     alternative="two-sided",
-#     equal_var=False,
-#     show_tstat=False,
-#     show_pval=False,
-#     show_stars=False,
-#     sigdigits=3,
-#     plevels=[0.001, 0.01, 0.05],
-#     includen=False,
-#     standard_errors=False,
-# ):
-#     def format_diff(diffs, pvals):
-#         formatted_diffs = []
-#         for diff, pval in zip(diffs, pvals):
-#             if pval < plevels[0]:
-#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}***")
-#             elif pval < plevels[1]:
-#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}**")
-#             elif pval < plevels[2]:
-#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}*")
-#             else:
-#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}")
-#         return formatted_diffs
-
-#     groups = df[group_var].unique()
-#     type_gdf = df.groupby(group_var)
-#     means = type_gdf[var_list].mean().T
-#     # hypothesis test for difference in means between each variable and group
-#     _stats = []
-#     pvals = []
-#     for var in var_list:
-#         _stat, pval = stats.ttest_ind(
-#             df[df[group_var] == groups[0]][var],
-#             df[df[group_var] == groups[1]][var],
-#             alternative=alternative,
-#             equal_var=equal_var,
-#         )
-#         _stats.append(_stat)
-#         pvals.append(pval)
-#     if len(groups) == 2:
-#         # find difference between the two columns produced and add to means df
-#         means["Difference"] = means[groups[0]] - means[groups[1]]
-#         if show_stars:
-#             means["Difference"] = format_diff(means["Difference"], pvals)
-#     total_means = df[var_list].mean()
-#     total_means.name = "Total Mean"
-#     means = means.merge(total_means, left_index=True, right_index=True)
-#     if show_tstat:
-#         means["T-Value"] = _stats
-#     if show_pval:
-#         means["P-Value"] = pvals
-
-#     # find the standard errors of the means and add between rows
-#     if standard_errors:
-#         sems = type_gdf[var_list].sem().T
-#         sems["Total Mean"] = df[var_list].sem()
-#         sems.index = ["" for var in sems.index]
-#         if pd.__version__ < "2.1.0":
-#             sems = sems.applymap(lambda x: f"({x:,.{sigdigits}f})")
-#         else:
-#             sems = sems.map(lambda x: f"({x:,.{sigdigits}f})")
-#         _dfs = []
-#         for i, _ in enumerate(var_list):
-#             _dfs.append(means.iloc[i : i + 1,])
-#             _dfs.append(sems.iloc[i : i + 1,])
-#         means = pd.concat(_dfs)
-#         means.fillna("", inplace=True)
-#     if includen:
-#         # get size of each group
-#         grp_sizes = df.groupby(group_var).size()
-#         grp_sizes["Total Mean"] = df.shape[0]
-#         # create a row eith the value from grp_sizes if it's there, otherwise a blank string
-#         nrow = [
-#             f"N={grp_sizes[c]:,}" if c in grp_sizes.index else "" for c in means.columns
-#         ]
-#         # create a multiindex column from means.columns and nrow
-#         means.columns = pd.MultiIndex.from_tuples(zip(means.columns, nrow))
-#     if index_names or columns_names:
-#         means.rename(index=index_names, columns=columns_names, inplace=True)
-
-#     return means

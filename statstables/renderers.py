@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class Renderer:
+class Renderer(ABC):
     def __init__(self):
         pass
 
@@ -53,20 +53,18 @@ class LatexRenderer(Renderer):
         if not only_tabular:
             header += "\\begin{table}[!htbp]\n  \\centering\n"
 
-            if self.table.caption is not None:
-                header += "  \\caption{" + self.table.caption + "}\n"
+            if self.table.caption_location == "top":
+                if self.table.caption is not None:
+                    header += "  \\caption{" + self.table.caption + "}\n"
 
-            if self.table.label is not None:
-                header += "  \\label{" + self.table.label + "}\n"
+                if self.table.label is not None:
+                    header += "  \\label{" + self.table.label + "}\n"
 
         content_columns = "c" * self.table.ncolumns
         if self.table.include_index:
             content_columns = "l" + content_columns
         header += "\\begin{tabular}{" + content_columns + "}\n"
         header += "  \\toprule\n"
-        # if len(self.table._multicolumns) > 0:
-        # if self.table.include_index:
-        # header += ("  " + self.table.index_name + " & ") * self.table.include_index
         for col, spans in self.table._multicolumns:
             header += ("  " + self.table.index_name + " & ") * self.table.include_index
             header += " & ".join(
@@ -79,7 +77,6 @@ class LatexRenderer(Renderer):
         if self.table.custom_tex_lines["after-multicolumns"]:
             for line in self.table.custom_tex_lines["after-multicolumns"]:
                 header += "  " + line + "\n"
-            # header += "\\\\\n"
         if self.table.show_columns:
             header += ("  " + self.table.index_name + " & ") * self.table.include_index
             header += " & ".join(
@@ -92,14 +89,9 @@ class LatexRenderer(Renderer):
         if self.table.custom_tex_lines["after-columns"]:
             for line in self.table.custom_tex_lines["after-columns"]:
                 header += "  " + line + "\n"
-            # header += "\\\\\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
-                # header += ("  " + line["label"] + " & ") * self.table.include_index
-                # header += " & ".join(line["line"])
-                # header += "\\\\\n"
                 header += self._create_line(line)
-            # header += "\\\\\n"
         header += "  \\midrule\n"
 
         return header
@@ -130,6 +122,12 @@ class LatexRenderer(Renderer):
 
         footer += "\\end{tabular}\n"
         if not only_tabular:
+            if self.table.caption_location == "bottom":
+                if self.table.caption is not None:
+                    footer += "  \\caption{" + self.table.caption + "}\n"
+
+                if self.table.label is not None:
+                    footer += "  \\label{" + self.table.label + "}\n"
             footer += "\\end{table}\n"
 
         return footer
@@ -164,11 +162,6 @@ class HTMLRenderer(Renderer):
     def generate_header(self):
         header = "<table>\n"
         header += "  <thead>\n"
-        # if len(self.table._multicolumns) > 0:
-        # header += "    <tr>\n"
-        # header += (
-        #     f"      <th>{self.table.index_name}</th>\n" * self.table.include_index
-        # )
         for col, spans in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
@@ -195,11 +188,6 @@ class HTMLRenderer(Renderer):
             header += "    </tr>\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
-                # header += "    <tr>\n"
-                # header += f"      <th>{line['label']}</th>\n" * self.table.include_index
-                # for l in line["line"]:
-                #     header += f"      <th>{l}</th>\n"
-                # header += "    </tr>\n"
                 header += self._create_line(line)
         header += "  </thead>\n"
         header += "  <tbody>\n"
