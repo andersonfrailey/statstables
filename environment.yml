@@ -2,10 +2,11 @@ name: statstables-dev
 channels:
   - conda-forge
 dependencies:
-  - python=3.11
+  - python>=3.11
   - numpy
   - pandas
   - matplotlib
+  - scipy
   # Add any other dependencies you need for your project
   - pip:
     - statsmodels

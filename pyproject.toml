@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "statstables"
+version = "0.0.a1"
+keywords = [
+  "statistics",
+  "tables",
+  "data",
+  "pandas",
+  "numpy",
+  "scipy",
+  "latex",
+  "html",
+]
+authors = [
+  { name="Anderson Frailey" },
+]
+description = "A package for making custom LaTeX and HTML statistical tables"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: GNU General Public License",
+    "Operating System :: OS Independent",
+    "Development Status :: 2 - Pre-Alpha"
+]
+dependencies = [
+    "numpy",
+    "pandas>=2",
+    "scipy",
+]
+
+[project.urls]
+Homepage = "https://github.com/andersonfrailey/statstables"
+Issues = "https://github.com/andersonfrailey/statstables/issues"

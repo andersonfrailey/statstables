@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import warnings
 from abc import ABC, abstractmethod
 from scipy import stats
@@ -21,23 +22,124 @@ class Table(ABC):
         """
         Resets all parameters to their default values
         """
-        self.caption_location = "botom"
+        self.caption_location = "bottom"
         self.caption = None
         self.label = None
         self.sig_digits = 3
         self.thousands_sep = ","
-        self.index_labels = dict()
-        self.column_labels = dict()
-        self.multicolumns = []
-        self.formatters = None
-        self.index_formatter = False
-        self.column_formatter = False
+        self._index_labels = dict()
+        self._column_labels = dict()
+        self._multicolumns = []
+        self._formatters = dict()
+        # self.index_formatter = False
+        # self.column_formatter = False
         self.notes = []
         self.custom_lines = defaultdict(list)
         self.custom_tex_lines = defaultdict(list)
         self.custom_html_lines = defaultdict(list)
         self.include_index = False
         self.index_name = ""
+        self._show_columns = True
+
+    @property
+    def caption_location(self) -> None:
+        """
+        Location of the caption in the table. Can be either 'top' or 'bottom'.
+        """
+        return self._caption_location
+
+    @caption_location.setter
+    def caption_location(self, location: str) -> None:
+        assert location in [
+            "top",
+            "bottom",
+        ], "caption_location must be 'top' or 'bottom'"
+        self._caption_location = location
+
+    @property
+    def caption(self) -> None:
+        """
+        Caption for the table. This will be placed above or below the table,
+        depending on the caption_location parameter.
+        """
+        return self._caption
+
+    @caption.setter
+    def caption(self, caption: str = None) -> None:
+        assert isinstance(caption, (str, type(None))), "Caption must be a string"
+        self._caption = caption
+
+    @property
+    def label(self) -> None:
+        """
+        Label for the table. This will be used to reference the table in LaTeX.
+        """
+        return self._label
+
+    @label.setter
+    def label(self, label: str = None) -> None:
+        assert isinstance(label, (str, type(None))), "Label must be a string"
+        self._label = label
+
+    @property
+    def sig_digits(self) -> int:
+        """
+        Number of significant digits to include in the table
+        """
+        return self._sig_digits
+
+    @sig_digits.setter
+    def sig_digits(self, digits: int) -> None:
+        assert isinstance(digits, int), "sig_digits must be an integer"
+        self._sig_digits = digits
+
+    @property
+    def thousands_sep(self) -> str:
+        """
+        Character to use as the thousands separator in the table
+        """
+        return self._thousands_sep
+
+    @thousands_sep.setter
+    def thousands_sep(self, sep: str) -> None:
+        assert isinstance(sep, str), "thousands_sep must be a string"
+        self._thousands_sep = sep
+
+    @property
+    def include_index(self) -> bool:
+        """
+        Whether or not to include the index in the table
+        """
+        return self._include_index
+
+    @include_index.setter
+    def include_index(self, include: bool) -> None:
+        assert isinstance(include, bool), "include_index must be True or False"
+        self._include_index = include
+
+    @property
+    def index_name(self) -> str:
+        """
+        Name of the index column in the table
+        """
+        return self._index_name
+
+    @index_name.setter
+    def index_name(self, name: str) -> None:
+        assert isinstance(name, str), "index_name must be a string"
+        self._index_name = name
+
+    @property
+    def show_columns(self) -> bool:
+        """
+        Whether or not to show the column labels in the table
+        """
+        return self._show_columns
+
+    @show_columns.setter
+    def show_columns(self, show: bool) -> None:
+        assert isinstance(show, bool), "show_columns must be True or False"
+        self._show_columns = show
 
     def rename_columns(self, columndict: dict) -> None:
         """
@@ -50,7 +152,7 @@ class Table(ABC):
             _description_
         """
         assert isinstance(columndict, dict), "columndict must be a dictionary"
-        self.column_labels = columndict
+        self._column_labels = columndict
 
     def rename_index(self, indexdict: dict) -> None:
         """
@@ -64,8 +166,9 @@ class Table(ABC):
             are the new labels.
         """
         assert isinstance(indexdict, dict), "indexdict must be a dictionary"
-        self.index_labels = indexdict
+        self._index_labels = indexdict
 
+    # TODO: Add method for creating rows that span multiple columns
     def add_multicolumns(
         self,
         columns: Union[str, list[str]],
@@ -90,6 +193,7 @@ class Table(ABC):
             underline, etc.), by default None
         """
         # TODO: implement formats (underline, bold, etc.)
+        # TODO: Allow for placing the multicolumns below the table body
         if not spans:
             spans = [self.ncolumns]
         assert len(columns) == len(spans), "columns and spans must be the same length"
@@ -97,9 +201,9 @@ class Table(ABC):
             sum(spans) == self.ncolumns
         ), "The sum of spans must equal the number of columns"
         # TODO: Allow for the column to also cover the index?
-        self.multicolumns.append((columns, spans))
+        self._multicolumns.append((columns, spans))
 
-    def custom_formatters(self, formatters: dict, axis: str = "columns") -> None:
+    def custom_formatters(self, formatters: dict) -> None:
         """
         Method to set custom formatters either along the columns or index. Each
         key in the formatters dict must be a function that returns a string.
@@ -111,7 +215,8 @@ class Table(ABC):
         ----------
         formatters : dict
             Dictionary of fuctions to format the values. The keys should correspond
-            to either a column or index label in the table.
+            to either a column or index label in the table. If you want to format
+            along both axis, the key should be a tuple of the form: (index, column)
         axis : str, optional
             Which axis to format along, by default "columns"
 
@@ -123,21 +228,7 @@ class Table(ABC):
         assert all(
             callable(f) for f in formatters.values()
         ), "Values in the formatters dict must be functions"
-        if axis == "columns":
-            if self.index_formatter:
-                warnings.warn(
-                    "You've already set the index formatter. This will be overwritten"
-                )
-            self.column_formatter = True
-        elif axis == "index":
-            if self.column_formatter:
-                warnings.warn(
-                    "You've already set the column formatter. This will be overwritten"
-                )
-            self.index_formatter = True
-        else:
-            raise ValueError("axis must be 'columns' or 'index'")
-        self.formatters = formatters
+        self._formatters = formatters
 
     def add_note(self, note: str, alignment: str = "l", escape: bool = True) -> None:
         """
@@ -182,7 +273,7 @@ class Table(ABC):
             self.notes.pop(index)
 
     def add_line(
-        self, line: list[str], location: str = "bottom", label: str = ""
+        self, line: list[str], location: str = "after-body", label: str = ""
     ) -> None:
         """
         Add a line to the table that will be rendered at the specified location.
@@ -378,12 +469,28 @@ class Table(ABC):
             return value
         return value
 
+    def _format_value(self, _index, col, value):
+        if (_index, col) in self._formatters.keys():
+            formatter = self._formatters[(_index, col)]
+        elif _index in self._formatters.keys():
+            formatter = self._formatters.get(_index, self._default_formatter)
+        elif col in self._formatters.keys():
+            formatter = self._formatters.get(col, self._default_formatter)
+        else:
+            formatter = self._default_formatter
+        return formatter(value)
+
     @abstractmethod
     def _create_rows(self) -> list[list[str]]:
         pass
 
+    @staticmethod
+    def _validate_input_type(value, dtype):
+        if not isinstance(value, dtype):
+            raise TypeError(f"{value} must be a {dtype}")
 
-class GenerticTable(Table):
+
+class GenericTable(Table):
     """
     A generic table will take in any DataFrame and allow for easy formating and
     column/index naming
@@ -402,16 +509,21 @@ class GenerticTable(Table):
 
     def _create_rows(self):
         rows = []
-        for iname, row in self.df.iterrows():
-            _row = [self.index_labels.get(iname, iname)]
-            for _index, value in zip(row.index, row.values):
-                if self.index_formatter:
-                    formatter = self.formatters.get(iname, self._default_formatter)
-                elif self.column_formatter:
-                    formatter = self.formatters.get(_index, self._default_formatter)
-                else:
-                    formatter = self._default_formatter
-                _row.append(formatter(value))
+        for _index, row in self.df.iterrows():
+            _row = [self._index_labels.get(_index, _index)]
+            for col, value in zip(row.index, row.values):
+                # if (_index, col) in self._formatters.keys():
+                #     formatter = self._formatters[(_index, col)]
+                # elif _index in self._formatters.keys():
+                #     formatter = self._formatters.get(_index, self._default_formatter)
+                # elif col in self._formatters.keys():
+                #     formatter = self._formatters.get(col, self._default_formatter)
+                # else:
+                #     formatter = self._default_formatter
+                formated_val = self._format_value(_index, col, value)
+                _row.append(formated_val)
+            if not self.include_index:
+                _row.pop(0)
             rows.append(_row)
         return rows
 
@@ -448,6 +560,7 @@ class MeanDifferenceTable(Table):
             by default, but can be set to 'greater' or 'less' for a one-sided test.
             For now, the same test is applied to each variable.
         """
+        # TODO: allow for grouping on multiple variables
         self.groups = df[group_var].unique()
         self.ngroups = len(self.groups)
         self.var_list = var_list
@@ -480,7 +593,11 @@ class MeanDifferenceTable(Table):
         self.add_latex_line(
             (
                 "\\cline{2-" + str(self.ngroups + 1) + "}"
-                "\\cline{" + str(self.ngroups + 3) + "-" + str(self.ncolumns + 1) + "}"
+                "\\cline{"
+                + str(self.ngroups + 3)
+                + "-"
+                + str(self.ncolumns + 1)
+                + "}\\\\\n"
             ),
             location="after-multicolumns",
         )  # this too
@@ -492,6 +609,33 @@ class MeanDifferenceTable(Table):
         self.p_values = [0.1, 0.05, 0.01]
         self.include_index = True
         self.show_stars = True
+
+    @property
+    def show_n(self) -> bool:
+        return self._show_n
+
+    @show_n.setter
+    def show_n(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_n = value
+
+    @property
+    def show_standard_errors(self) -> bool:
+        return self._show_standard_errors
+
+    @show_standard_errors.setter
+    def show_standard_errors(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_standard_errors = value
+
+    @property
+    def show_stars(self) -> bool:
+        return self._show_stars
+
+    @show_stars.setter
+    def show_stars(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_stars = value
 
     @staticmethod
     def _render(render_func):
@@ -517,7 +661,7 @@ class MeanDifferenceTable(Table):
                     ]
                 )
                 note = f"Significance levels: {stars}"
-                self.add_note(note, alignment="r", escape=True)
+                self.add_note(note, alignment="r", escape=False)
             output = render_func(self, **kwargs)
             # remove all the supurflous lines that may not be needed in future renders
             if self.show_n:
@@ -566,25 +710,28 @@ class MeanDifferenceTable(Table):
 
     def _create_rows(self):
         rows = []
-        for i, row in enumerate(self.means.iterrows()):
+        for _index, row in self.means.iterrows():
             sem_row = [""]
-            _row = [self.index_labels.get(row[0], row[0])]
-            for _index, value in zip(row[1].index, row[1].values):
-                if self.index_formatter:
-                    formated_val = self.formatters[row[0]](value)
-                elif self.column_formatter:
-                    formated_val = self.formatters[_index](value)
-                else:
-                    formated_val = self._default_formatter(value)
+            _row = [self._index_labels.get(_index, _index)]
+            for col, value in zip(row.index, row.values):
+                # if (_index, col) in self._formatters.keys():
+                #     formatter = self._formatters[(_index, col)]
+                # elif _index in self._formatters.keys():
+                #     formated_val = self._formatters[_index](value)
+                # elif col in self._formatters.keys():
+                #     formated_val = self._formatters[col](value)
+                # else:
+                #     formated_val = self._default_formatter(value)
+                formated_val = self._format_value(_index, col, value)
                 if self.show_standard_errors:
                     try:
-                        se = self.sem.loc[row[0], _index]
+                        se = self.sem.loc[_index, col]
                         sem_row.append(f"({se:,.{self.sig_digits}f})")
                     except KeyError:
                         sem_row.append("")
                 if self.show_stars:
                     try:
-                        pval = self.pvalues[f"{_index}_{row[0]}"]
+                        pval = self.pvalues[f"{col}_{_index}"]
                         stars = pstars(pval, self.p_values)
                     except KeyError:
                         stars = ""
@@ -596,10 +743,192 @@ class MeanDifferenceTable(Table):
         return rows
 
 
-class SummaryTable(GenerticTable):
+class SummaryTable(GenericTable):
     def __init__(self, df: pd.DataFrame, var_list: list[str]):
         summary_df = df[var_list].describe()
         super().__init__(summary_df)
+
+    def reset_params(self):
+        super().reset_params()
+        self.rename_index(
+            {
+                "count": "Count",
+                "mean": "Mean",
+                "std": "Std. Dev.",
+                "min": "Min.",
+                "max": "Max.",
+            }
+        )
+
+
+class ModelTable(Table):
+    """
+    A table that can be used to show the results of most models passed in, with
+    enough user guidance.
+    """
+
+    def __init__(
+        self,
+        models: list,
+        param_value_attr: str = "params",
+        param_names_attr: str = None,
+        std_err_attr: str = None,
+        ci_attr: str = None,
+        model_names: list[str] = None,
+        model_summary_vars: dict = None,  # things like r2, T, etc.
+    ):
+        self.models = models
+        self.ncolumns = len(models)
+        self.ci_attr = ci_attr
+        self.columns = model_names
+        # self._param_names = param_names
+
+        # self.param_attr = param_attr
+        self.std_err_attr = std_err_attr
+        # extract data from each model
+        self._model_dict = {}
+        self._param_names = []
+        for i, mod in enumerate(models):
+            _params_dict = {}
+            _stders_dict = {}
+            _cis_dict = {}
+            _params = self._get_attr(mod, param_value_attr)
+            _names = self._get_attr(mod, param_names_attr)
+            _stders = self._get_attr(mod, std_err_attr)
+            # _cis = self._get_attr(mod, ci_attr)
+            for _name, _param, stder in zip(_names, _params, _stders):
+                if _name not in self._param_names:
+                    self._param_names.append(_name)
+                _params_dict[_name] = _param
+                _stders_dict[_name] = stder
+                # _cis_dict[_name] = ci
+            self._model_dict[i] = {"params": _params_dict, "std_errs": _stders_dict}
+        self.reset_params()
+
+    def reset_params(self):
+        super().reset_params()
+        self.include_index = True
+        self.show_model_nums = True
+        self._model_nums = [f"({i})" for i in range(1, len(self.models) + 1)]
+        # if no column names are provided use the model numbers
+        if self.columns is None:
+            self.columns = self._model_nums
+            self.show_model_nums = False
+
+        self.single_line = False
+        self.parameter_order = self._param_names
+        self.show_standard_errors = True
+
+    @property
+    def show_model_nums(self) -> bool:
+        """
+        If true, model numbers are included under the column names
+        """
+        return self._show_model_nums
+
+    @show_model_nums.setter
+    def show_model_nums(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_model_nums = value
+
+    @property
+    def single_row(self) -> bool:
+        """
+        If true, the significance variable (either standard error or confience interval)
+        will be rendered on the same line as the parameter value
+        """
+        return self._single_row
+
+    @single_row.setter
+    def single_row(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._single_row = value
+
+    @property
+    def columns(self) -> list:
+        return self._columns
+
+    @columns.setter
+    def columns(self, column_labels: list[str]) -> None:
+        if not column_labels is None:
+            if not isinstance(column_labels, list):
+                raise TypeError("Column labels must be a list of strings")
+            for col in column_labels:
+                if not isinstance(col, str):
+                    raise ValueError("All column labels must be strings")
+        self._columns = column_labels
+
+    @property
+    def parameter_order(self) -> list:
+        return self._parameter_order
+
+    @parameter_order.setter
+    def parameter_order(self, order: list) -> None:
+        if not order is None:
+            if not isinstance(order, list):
+                raise TypeError("Parameter order must be a list of strings")
+            for param in order:
+                if not isinstance(param, str):
+                    raise ValueError("All parameter names must be strings")
+            self._parameter_order = order
+
+    @property
+    def show_standard_errors(self) -> bool:
+        return self._show_standard_errors
+
+    @show_standard_errors.setter
+    def show_standard_errors(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_standard_errors = value
+
+    def _create_rows(self):
+        rows = []
+        for param in self.parameter_order:
+            _row = [self._index_labels.get(param, param)]
+            se_row = [""]
+            for col, mod in zip(self.columns, self._model_dict.values()):
+                param_val = mod["params"].get(param, "")
+                se_val = mod["std_errs"].get(param, "")
+                _row.append(self._format_value(param, col, param_val))
+                if isinstance(se_val, str):
+                    se_row.append(se_val)
+                else:
+                    se_row.append(f"({se_val:,.{self.sig_digits}f})")
+            rows.append(_row)
+            if self.show_standard_errors:
+                rows.append(se_row)
+
+        return rows
+
+    @staticmethod
+    def _get_attr(mod, attrstr):
+        if "." in attrstr:
+            attrs = attrstr.split(".")
+            for a in attrs:
+                mod = getattr(mod, a)
+        else:
+            mod = getattr(mod, attrstr)
+        return mod
+
+    @staticmethod
+    def _render(render_func):
+        def wrapper(self, **kwargs):
+            if self.show_model_nums:
+                self.add_line(self._model_nums, location="after-columns")
+            output = render_func(self, **kwargs)
+            if self.show_model_nums:
+                self.remove_line(location="after-columns", index=-1)
+            return output
+
+        return wrapper
+
+    @_render
+    def render_latex(self, buf=None, only_tabular=False) -> str | None:
+        return super().render_latex(buf, only_tabular)
+
+    @_render
+    def render_html(self, buf=None) -> str | None:
+        return super().render_html(buf)
 
 
 class PanelTable:
@@ -611,89 +940,89 @@ class PanelTable:
         pass
 
 
-def mean_diffs_table(
-    df,
-    group_var,
-    var_list,
-    index_names=None,
-    columns_names=None,
-    alternative="two-sided",
-    equal_var=False,
-    show_tstat=False,
-    show_pval=False,
-    show_stars=False,
-    sigdigits=3,
-    plevels=[0.001, 0.01, 0.05],
-    includen=False,
-    standard_errors=False,
-):
-    def format_diff(diffs, pvals):
-        formatted_diffs = []
-        for diff, pval in zip(diffs, pvals):
-            if pval < plevels[0]:
-                formatted_diffs.append(f"{diff:,.{sigdigits}f}***")
-            elif pval < plevels[1]:
-                formatted_diffs.append(f"{diff:,.{sigdigits}f}**")
-            elif pval < plevels[2]:
-                formatted_diffs.append(f"{diff:,.{sigdigits}f}*")
-            else:
-                formatted_diffs.append(f"{diff:,.{sigdigits}f}")
-        return formatted_diffs
+# def mean_diffs_table(
+#     df,
+#     group_var,
+#     var_list,
+#     index_names=None,
+#     columns_names=None,
+#     alternative="two-sided",
+#     equal_var=False,
+#     show_tstat=False,
+#     show_pval=False,
+#     show_stars=False,
+#     sigdigits=3,
+#     plevels=[0.001, 0.01, 0.05],
+#     includen=False,
+#     standard_errors=False,
+# ):
+#     def format_diff(diffs, pvals):
+#         formatted_diffs = []
+#         for diff, pval in zip(diffs, pvals):
+#             if pval < plevels[0]:
+#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}***")
+#             elif pval < plevels[1]:
+#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}**")
+#             elif pval < plevels[2]:
+#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}*")
+#             else:
+#                 formatted_diffs.append(f"{diff:,.{sigdigits}f}")
+#         return formatted_diffs
 
-    groups = df[group_var].unique()
-    type_gdf = df.groupby(group_var)
-    means = type_gdf[var_list].mean().T
-    # hypothesis test for difference in means between each variable and group
-    _stats = []
-    pvals = []
-    for var in var_list:
-        _stat, pval = stats.ttest_ind(
-            df[df[group_var] == groups[0]][var],
-            df[df[group_var] == groups[1]][var],
-            alternative=alternative,
-            equal_var=equal_var,
-        )
-        _stats.append(_stat)
-        pvals.append(pval)
-    if len(groups) == 2:
-        # find difference between the two columns produced and add to means df
-        means["Difference"] = means[groups[0]] - means[groups[1]]
-        if show_stars:
-            means["Difference"] = format_diff(means["Difference"], pvals)
-    total_means = df[var_list].mean()
-    total_means.name = "Total Mean"
-    means = means.merge(total_means, left_index=True, right_index=True)
-    if show_tstat:
-        means["T-Value"] = _stats
-    if show_pval:
-        means["P-Value"] = pvals
+#     groups = df[group_var].unique()
+#     type_gdf = df.groupby(group_var)
+#     means = type_gdf[var_list].mean().T
+#     # hypothesis test for difference in means between each variable and group
+#     _stats = []
+#     pvals = []
+#     for var in var_list:
+#         _stat, pval = stats.ttest_ind(
+#             df[df[group_var] == groups[0]][var],
+#             df[df[group_var] == groups[1]][var],
+#             alternative=alternative,
+#             equal_var=equal_var,
+#         )
+#         _stats.append(_stat)
+#         pvals.append(pval)
+#     if len(groups) == 2:
+#         # find difference between the two columns produced and add to means df
+#         means["Difference"] = means[groups[0]] - means[groups[1]]
+#         if show_stars:
+#             means["Difference"] = format_diff(means["Difference"], pvals)
+#     total_means = df[var_list].mean()
+#     total_means.name = "Total Mean"
+#     means = means.merge(total_means, left_index=True, right_index=True)
+#     if show_tstat:
+#         means["T-Value"] = _stats
+#     if show_pval:
+#         means["P-Value"] = pvals
 
-    # find the standard errors of the means and add between rows
-    if standard_errors:
-        sems = type_gdf[var_list].sem().T
-        sems["Total Mean"] = df[var_list].sem()
-        sems.index = ["" for var in sems.index]
-        if pd.__version__ < "2.1.0":
-            sems = sems.applymap(lambda x: f"({x:,.{sigdigits}f})")
-        else:
-            sems = sems.map(lambda x: f"({x:,.{sigdigits}f})")
-        _dfs = []
-        for i, _ in enumerate(var_list):
-            _dfs.append(means.iloc[i : i + 1,])
-            _dfs.append(sems.iloc[i : i + 1,])
-        means = pd.concat(_dfs)
-        means.fillna("", inplace=True)
-    if includen:
-        # get size of each group
-        grp_sizes = df.groupby(group_var).size()
-        grp_sizes["Total Mean"] = df.shape[0]
-        # create a row eith the value from grp_sizes if it's there, otherwise a blank string
-        nrow = [
-            f"N={grp_sizes[c]:,}" if c in grp_sizes.index else "" for c in means.columns
-        ]
-        # create a multiindex column from means.columns and nrow
-        means.columns = pd.MultiIndex.from_tuples(zip(means.columns, nrow))
-    if index_names or columns_names:
-        means.rename(index=index_names, columns=columns_names, inplace=True)
+#     # find the standard errors of the means and add between rows
+#     if standard_errors:
+#         sems = type_gdf[var_list].sem().T
+#         sems["Total Mean"] = df[var_list].sem()
+#         sems.index = ["" for var in sems.index]
+#         if pd.__version__ < "2.1.0":
+#             sems = sems.applymap(lambda x: f"({x:,.{sigdigits}f})")
+#         else:
+#             sems = sems.map(lambda x: f"({x:,.{sigdigits}f})")
+#         _dfs = []
+#         for i, _ in enumerate(var_list):
+#             _dfs.append(means.iloc[i : i + 1,])
+#             _dfs.append(sems.iloc[i : i + 1,])
+#         means = pd.concat(_dfs)
+#         means.fillna("", inplace=True)
+#     if includen:
+#         # get size of each group
+#         grp_sizes = df.groupby(group_var).size()
+#         grp_sizes["Total Mean"] = df.shape[0]
+#         # create a row eith the value from grp_sizes if it's there, otherwise a blank string
+#         nrow = [
+#             f"N={grp_sizes[c]:,}" if c in grp_sizes.index else "" for c in means.columns
+#         ]
+#         # create a multiindex column from means.columns and nrow
+#         means.columns = pd.MultiIndex.from_tuples(zip(means.columns, nrow))
+#     if index_names or columns_names:
+#         means.rename(index=index_names, columns=columns_names, inplace=True)
 
-    return means
+#     return means

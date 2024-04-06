@@ -1,4 +1,3 @@
-from stargazer.stargazer import HTMLRenderer, LaTeXRenderer
 from abc import ABC, abstractmethod
 
 
@@ -49,7 +48,7 @@ class LatexRenderer(Renderer):
 
         return out
 
-    def generate_header(self, only_tabular=False):
+    def generate_header(self, only_tabular=False, column_alignment=None):
         header = ""
         if not only_tabular:
             header += "\\begin{table}[!htbp]\n  \\centering\n"
@@ -65,35 +64,42 @@ class LatexRenderer(Renderer):
             content_columns = "l" + content_columns
         header += "\\begin{tabular}{" + content_columns + "}\n"
         header += "  \\toprule\n"
-        if len(self.table.multicolumns) > 0:
-            # if self.table.include_index:
+        # if len(self.table._multicolumns) > 0:
+        # if self.table.include_index:
+        # header += ("  " + self.table.index_name + " & ") * self.table.include_index
+        for col, spans in self.table._multicolumns:
             header += ("  " + self.table.index_name + " & ") * self.table.include_index
-            for col, spans in self.table.multicolumns:
-                header += " & ".join(
-                    [
-                        f"\\multicolumn{{{s}}}{{c}}{{{self._escape(c)}}}"
-                        for c, s in zip(col, spans)
-                    ]
-                )
-                header += " \\\\\n"
-        for line in self.table.custom_tex_lines["after-multicolumns"]:
-            header += "  " + line + "\n"
-        header += "  " + self.table.index_name + " & " * self.table.include_index
-        header += " & ".join(
-            [
-                self._escape(self.table.column_labels.get(col, col))
-                for col in self.table.columns
-            ]
-        )
-        for line in self.table.custom_tex_lines["after-columns"]:
-            header += "  " + line + "\n"
-        header += "\\\\\n"
+            header += " & ".join(
+                [
+                    f"\\multicolumn{{{s}}}{{c}}{{{self._escape(c)}}}"
+                    for c, s in zip(col, spans)
+                ]
+            )
+            header += " \\\\\n"
+        if self.table.custom_tex_lines["after-multicolumns"]:
+            for line in self.table.custom_tex_lines["after-multicolumns"]:
+                header += "  " + line + "\n"
+            # header += "\\\\\n"
+        if self.table.show_columns:
+            header += ("  " + self.table.index_name + " & ") * self.table.include_index
+            header += " & ".join(
+                [
+                    self._escape(self.table._column_labels.get(col, col))
+                    for col in self.table.columns
+                ]
+            )
+            header += "\\\\\n"
+        if self.table.custom_tex_lines["after-columns"]:
+            for line in self.table.custom_tex_lines["after-columns"]:
+                header += "  " + line + "\n"
+            # header += "\\\\\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
                 # header += ("  " + line["label"] + " & ") * self.table.include_index
                 # header += " & ".join(line["line"])
                 # header += "\\\\\n"
                 header += self._create_line(line)
+            # header += "\\\\\n"
         header += "  \\midrule\n"
 
         return header
@@ -158,28 +164,35 @@ class HTMLRenderer(Renderer):
     def generate_header(self):
         header = "<table>\n"
         header += "  <thead>\n"
-        if len(self.table.multicolumns) > 0:
+        # if len(self.table._multicolumns) > 0:
+        # header += "    <tr>\n"
+        # header += (
+        #     f"      <th>{self.table.index_name}</th>\n" * self.table.include_index
+        # )
+        for col, spans in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
-                f"      <th>{self.table.index_name}</th>\n" * self.table.include_index
+                f"      <th>{self.table.index_name}</th>\n"
+            ) * self.table.include_index
+            header += "      " + " ".join(
+                [
+                    f'<th colspan="{s}" style="text-align:center;">{c}</th>'
+                    for c, s in zip(col, spans)
+                ]
             )
-            for col, spans in self.table.multicolumns:
-                header += "      " + " ".join(
-                    [
-                        f'<th colspan="{s}" style="text-align:center;">{c}</th>'
-                        for c, s in zip(col, spans)
-                    ]
-                )
-                header += "\n"
+            header += "\n"
             header += "    </tr>\n"
         for line in self.table.custom_html_lines["after-multicolumns"]:
             # TODO: Implement
             pass
-        header += "    <tr>\n"
-        header += f"      <th>{self.table.index_name}</th>\n" * self.table.include_index
-        for col in self.table.columns:
-            header += f'      <th style="text-align:center;">{self.table.column_labels.get(col, col)}</th>\n'
-        header += "    </tr>\n"
+        if self.table.show_columns:
+            header += "    <tr>\n"
+            header += (
+                f"      <th>{self.table.index_name}</th>\n"
+            ) * self.table.include_index
+            for col in self.table.columns:
+                header += f'      <th style="text-align:center;">{self.table._column_labels.get(col, col)}</th>\n'
+            header += "    </tr>\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
                 # header += "    <tr>\n"
@@ -228,7 +241,7 @@ class HTMLRenderer(Renderer):
 
     def _create_line(self, line):
         out = "    <tr>\n"
-        out += f"      <th>{line['label']}</th>\n" * self.table.include_index
+        out += (f"      <th>{line['label']}</th>\n") * self.table.include_index
         for l in line["line"]:
             out += f"      <th>{l}</th>\n"
         out += "    </tr>\n"
