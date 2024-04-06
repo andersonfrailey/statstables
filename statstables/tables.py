@@ -39,7 +39,7 @@ class Table(ABC):
         self.custom_html_lines = defaultdict(list)
         self.include_index = False
         self.index_name = ""
-        self._show_columns = True
+        self.show_columns = True
 
     @property
     def caption_location(self) -> None:
