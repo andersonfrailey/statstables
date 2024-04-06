@@ -672,11 +672,11 @@ class MeanDifferenceTable(Table):
         return wrapper
 
     @_render
-    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
+    def render_latex(self, outfile=None, only_tabular=False) -> Union[str, None]:
         return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, outfile=None) -> str | None:
+    def render_html(self, outfile=None) -> Union[str, None]:
         return super().render_html(outfile)
 
     def _get_diffs(self):
