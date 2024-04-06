@@ -293,7 +293,7 @@ class Table(ABC):
         assert len(line) == self.ncolumns, "Line must have the same number of columns"
         self.custom_lines[location].append({"line": line, "label": label})
 
-    def remove_line(self, location: str, line: list = None, index: int = None):
+    def remove_line(self, location: str, line: list = None, index: int = None) -> None:
         """
         Remove a custom line. To specify which line to remove, either pass the list
         containing the line as the 'line' parameter or the index of the line as the
@@ -341,7 +341,9 @@ class Table(ABC):
         validate_line_location(location)
         self.custom_tex_lines[location].append(line)
 
-    def remove_latex_line(self, location: str, line: str = None, index: int = None):
+    def remove_latex_line(
+        self, location: str, line: str = None, index: int = None
+    ) -> None:
         """
         Remove a custom LaTex line. To specify which line to remove, either pass the list
         containing the line as the 'line' parameter or the index of the line as the
@@ -459,14 +461,14 @@ class Table(ABC):
     def _repr_html_(self) -> str:
         return self.render_html()
 
-    def _default_formatter(self, value) -> str:
+    def _default_formatter(self, value: Union[int, float, str]) -> str:
         if isinstance(value, (int, float)):
             return f"{value:{self.thousands_sep}.{self.sig_digits}f}"
         elif isinstance(value, str):
             return value
         return value
 
-    def _format_value(self, _index, col, value):
+    def _format_value(self, _index: str, col: str, value: Union[int, float, str]):
         if (_index, col) in self._formatters.keys():
             formatter = self._formatters[(_index, col)]
         elif _index in self._formatters.keys():
@@ -748,7 +750,7 @@ class SummaryTable(GenericTable):
         summary_df = df[var_list].describe()
         super().__init__(summary_df)
 
-    def reset_params(self):
+    def reset_params(self) -> None:
         super().reset_params()
         self.rename_index(
             {
@@ -802,7 +804,7 @@ class ModelTable(Table):
             self._model_dict[i] = {"params": _params_dict, "std_errs": _stders_dict}
         self.reset_params()
 
-    def reset_params(self):
+    def reset_params(self) -> None:
         super().reset_params()
         self.include_index = True
         self.show_model_nums = True
@@ -920,11 +922,11 @@ class ModelTable(Table):
         return wrapper
 
     @_render
-    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
+    def render_latex(self, outfile=None, only_tabular=False) -> Union[str, None]:
         return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, outfile=None) -> str | None:
+    def render_html(self, outfile=None) -> Union[str, None]:
         return super().render_html(outfile)
 
 
