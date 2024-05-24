@@ -258,7 +258,7 @@ class Table(ABC):
         alignment : str, optional
             Which side of the table to align the note, by default "l"
         escape : bool, optional
-            If true, a \ is added LaTeX characters that must be escaped, by default True
+            If true, a "\" is added LaTeX characters that must be escaped, by default True
         """
         assert isinstance(note, str), "Note must be a string"
         assert alignment in ["l", "c", "r"], "alignment must be 'l', 'c', or 'r'"
@@ -491,8 +491,10 @@ class Table(ABC):
             return html_str
         Path(outfile).write_text(html_str)
 
-    def render_ascii(self) -> str:
-        return ASCIIRenderer(self).render()
+    def render_ascii(self, padding=2) -> str:
+        renderer = ASCIIRenderer(self)
+        # renderer.padding = padding
+        return renderer.render()
 
     def __str__(self) -> str:
         return self.render_ascii()

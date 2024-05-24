@@ -10,16 +10,20 @@ class Renderer(ABC):
         pass
 
     @abstractmethod
-    def generate_header(self) -> str: ...
+    def generate_header(self) -> str:
+        ...
 
     @abstractmethod
-    def generate_body(self) -> str: ...
+    def generate_body(self) -> str:
+        ...
 
     @abstractmethod
-    def generate_footer(self) -> str: ...
+    def generate_footer(self) -> str:
+        ...
 
     @abstractmethod
-    def _create_line(self, line) -> str: ...
+    def _create_line(self, line) -> str:
+        ...
 
 
 class LatexRenderer(Renderer):
@@ -242,9 +246,26 @@ class ASCIIRenderer(Renderer):
         self.table = table
         self.padding = 2  # number of spaces to place on either side of cell values
         self.ncolumns = self.table.ncolumns + int(self.table.include_index)
-        # self.max_row_len = 0
+        self.reset_size_parameters()
+
+    def reset_size_parameters(self):
+        self.max_row_len = 0
         self.max_body_cell_size = 0
         self.max_index_name_cell_size = 0
+        self._len = 0
+
+    @property
+    def padding(self) -> int:
+        return self._padding
+
+    @padding.setter
+    def padding(self, value):
+        assert isinstance(value, int), "Padding must be an integer"
+        if value < 0:
+            raise ValueError("Padding must be a non-negative integer")
+        if value > 20:
+            raise ValueError("Woah there buddy. That's a lot of space.")
+        self._padding = value
 
     def render(self) -> str:
         self._get_table_widths()
@@ -254,7 +275,7 @@ class ASCIIRenderer(Renderer):
         return out
 
     def generate_header(self) -> str:
-        header = "=" * self._len + "\n"
+        header = "=" * (self._len + 2) + "\n"
         for col, span in self.table._multicolumns:
             header += "|"
 
@@ -288,7 +309,7 @@ class ASCIIRenderer(Renderer):
         return body
 
     def generate_footer(self) -> str:
-        footer = "-" * self._len
+        footer = "-" * (self._len + 2)
         if self.table.notes:
             for note, alignment, _ in self.table.notes:
                 footer += "\n"
@@ -300,6 +321,7 @@ class ASCIIRenderer(Renderer):
         return ""
 
     def _get_table_widths(self) -> None:
+        self.reset_size_parameters()
         # find longest row and biggest cell
         rows = self.table._create_rows()
         for row in rows:
@@ -308,7 +330,11 @@ class ASCIIRenderer(Renderer):
                 cell_size = len(str(cell)) + (self.padding * 2)
                 self.max_body_cell_size = max(self.max_body_cell_size, cell_size)
                 row_len += cell_size
-            # self.max_row_len = max(self.max_row_len, row_len)
+                if i == 0 and self.table.include_index:
+                    self.max_index_name_cell_size = max(
+                        self.max_index_name_cell_size, cell_size
+                    )
+            self.max_row_len = max(self.max_row_len, row_len)
 
         if self.table.include_index:
             index_name_size = len(str(self.table.index_name)) + (self.padding * 2)
@@ -325,6 +351,6 @@ class ASCIIRenderer(Renderer):
                 col_len += col_size
             if self.table.include_index:
                 col_len += self.max_index_name_cell_size
-            # self.max_row_len = max(self.max_row_len, col_len)
+            self.max_row_len = max(self.max_row_len, col_len)
         self._len = self.max_body_cell_size * self.table.ncolumns
-        self._len += self.max_index_name_cell_size + self.padding
+        self._len += self.max_index_name_cell_size
