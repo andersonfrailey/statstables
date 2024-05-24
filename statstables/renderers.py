@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import statstables
 
 
 class Renderer(ABC):
@@ -244,7 +245,9 @@ class ASCIIRenderer(Renderer):
 
     def __init__(self, table):
         self.table = table
-        self.padding = 2  # number of spaces to place on either side of cell values
+        self.padding = statstables.params[
+            "ascii_padding"
+        ]  # number of spaces to place on either side of cell values
         self.ncolumns = self.table.ncolumns + int(self.table.include_index)
         self.reset_size_parameters()
 

@@ -491,10 +491,8 @@ class Table(ABC):
             return html_str
         Path(outfile).write_text(html_str)
 
-    def render_ascii(self, padding=2) -> str:
-        renderer = ASCIIRenderer(self)
-        # renderer.padding = padding
-        return renderer.render()
+    def render_ascii(self) -> str:
+        return ASCIIRenderer(self).render()
 
     def __str__(self) -> str:
         return self.render_ascii()
