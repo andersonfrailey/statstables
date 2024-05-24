@@ -6,7 +6,7 @@ from scipy import stats
 from typing import Union
 from collections import defaultdict
 from pathlib import Path
-from .renderers import LatexRenderer, HTMLRenderer
+from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
 from .utils import pstars, validate_line_location
 
 
@@ -30,6 +30,7 @@ class Table(ABC):
         self._index_labels = dict()
         self._column_labels = dict()
         self._multicolumns = []
+        self._multiindex = {}
         self._formatters = dict()
         self.notes = []
         self.custom_lines = defaultdict(list)
@@ -40,7 +41,7 @@ class Table(ABC):
         self.show_columns = True
 
     @property
-    def caption_location(self) -> None:
+    def caption_location(self) -> str:
         """
         Location of the caption in the table. Can be either 'top' or 'bottom'.
         """
@@ -55,7 +56,7 @@ class Table(ABC):
         self._caption_location = location
 
     @property
-    def caption(self) -> None:
+    def caption(self) -> str | None:
         """
         Caption for the table. This will be placed above or below the table,
         depending on the caption_location parameter.
@@ -63,19 +64,19 @@ class Table(ABC):
         return self._caption
 
     @caption.setter
-    def caption(self, caption: str = None) -> None:
+    def caption(self, caption: str | None = None) -> None:
         assert isinstance(caption, (str, type(None))), "Caption must be a string"
         self._caption = caption
 
     @property
-    def label(self) -> None:
+    def label(self) -> str | None:
         """
         Label for the table. This will be used to reference the table in LaTeX.
         """
         return self._label
 
     @label.setter
-    def label(self, label: str = None) -> None:
+    def label(self, label: str | None = None) -> None:
         assert isinstance(label, (str, type(None))), "Label must be a string"
         self._label = label
 
@@ -169,9 +170,9 @@ class Table(ABC):
     # TODO: Add method for creating index labels that span multiple rows
     def add_multicolumns(
         self,
-        columns: Union[str, list[str]],
-        spans: list[int],
-        formats: list[str] = None,
+        columns: str | list[str],
+        spans: list[int] | None = None,
+        formats: list[str] | None = None,
     ) -> None:
         """
         All columns that span multiple columns in the table. These will be placed
@@ -199,6 +200,25 @@ class Table(ABC):
             sum(spans) == self.ncolumns
         ), "The sum of spans must equal the number of columns"
         self._multicolumns.append((columns, spans))
+
+    def add_multiindex(self, index: list[str], spans: list[tuple]) -> None:
+        """
+        Add a multiindex to the table. This will be placed above the index column
+        in the table. The sum of the spans must equal the number of rows in the table.
+
+        Parameters
+        ----------
+        index : list[str]
+            List of labels for the multiindex
+        spans : list[tuple]
+            List of tuples that indicate where the index should start and how many
+            rows it should span. The first element of the tuple should be the row
+            it starts and the second should be the number of rows it spans.
+        """
+        assert len(index) == len(spans), "index and spans must be the same length"
+        self._multiindex.append((index, spans))
+        for i, s in zip(index, spans):
+            self._multiindex[s[0]] = {"index": i, "end": s[1]}
 
     def custom_formatters(self, formatters: dict) -> None:
         """
@@ -244,7 +264,16 @@ class Table(ABC):
         assert alignment in ["l", "c", "r"], "alignment must be 'l', 'c', or 'r'"
         self.notes.append((note, alignment, escape))
 
-    def remove_note(self, note: str = None, index: int = None) -> None:
+    def add_notes(self, notes: list[tuple]) -> None:
+        """
+        Adds multiple notes to the table. Each element of notes should be a tuple
+        where the first element is the text of the note, the second is the alignment
+        parameter and the third is the escape parameter.
+        """
+        for note in notes:
+            self.add_note(note=note[0], alignment=note[1], escape=note[2])
+
+    def remove_note(self, note: str | None = None, index: int | None = None) -> None:
         """
         Removes a note that has been added to the table. To specify which note,
         either pass the text of the note as the 'note' parameter or the index of
@@ -293,7 +322,9 @@ class Table(ABC):
         assert len(line) == self.ncolumns, "Line must have the same number of columns"
         self.custom_lines[location].append({"line": line, "label": label})
 
-    def remove_line(self, location: str, line: list = None, index: int = None) -> None:
+    def remove_line(
+        self, location: str, line: list | None = None, index: int | None = None
+    ) -> None:
         """
         Remove a custom line. To specify which line to remove, either pass the list
         containing the line as the 'line' parameter or the index of the line as the
@@ -342,7 +373,7 @@ class Table(ABC):
         self.custom_tex_lines[location].append(line)
 
     def remove_latex_line(
-        self, location: str, line: str = None, index: int = None
+        self, location: str, line: str | None = None, index: int | None = None
     ) -> None:
         """
         Remove a custom LaTex line. To specify which line to remove, either pass the list
@@ -393,7 +424,9 @@ class Table(ABC):
         validate_line_location(location)
         self.custom_html_lines[location].append(line)
 
-    def remove_html_line(self, location: str, line: str = None, index: int = None):
+    def remove_html_line(
+        self, location: str, line: str | None = None, index: int | None = None
+    ):
         validate_line_location(location)
         if line is None and index is None:
             raise ValueError("Either 'line' or 'index' must be provided")
@@ -404,7 +437,7 @@ class Table(ABC):
             self.custom_html_lines[location].pop(index)
 
     def render_latex(
-        self, outfile: Union[str, Path] = None, only_tabular=False
+        self, outfile: Union[str, Path, None] = None, only_tabular=False
     ) -> Union[str, None]:
         """
         Render the table in LaTeX. Note that you will need to include the booktabs
@@ -432,7 +465,7 @@ class Table(ABC):
             return tex_str
         Path(outfile).write_text(tex_str)
 
-    def render_html(self, outfile: Union[str, Path] = None) -> Union[str, None]:
+    def render_html(self, outfile: Union[str, Path, None] = None) -> Union[str, None]:
         """
         Render the table in HTML. Note that you will need to include the booktabs
         package in your LaTeX document. If no outfile is provided, the LaTeX
@@ -458,7 +491,16 @@ class Table(ABC):
             return html_str
         Path(outfile).write_text(html_str)
 
-    def _repr_html_(self) -> str:
+    def render_ascii(self) -> str:
+        return ASCIIRenderer(self).render()
+
+    def __str__(self) -> str:
+        return self.render_ascii()
+
+    def __repr__(self) -> str:
+        return self.render_ascii()
+
+    def _repr_html_(self):
         return self.render_html()
 
     def _default_formatter(self, value: Union[int, float, str]) -> str:
@@ -481,6 +523,11 @@ class Table(ABC):
 
     @abstractmethod
     def _create_rows(self) -> list[list[str]]:
+        """
+        This method should return a list of lists, where each inner list is a
+        row in the body of the table. Each element of those inner lists should
+        be one cell in the table.
+        """
         pass
 
     @staticmethod
@@ -515,6 +562,8 @@ class GenericTable(Table):
                 _row.append(formated_val)
             if not self.include_index:
                 _row.pop(0)
+            if _index in self._multiindex.keys():
+                _row.insert(0, self._multiindex[_index]["index"])
             rows.append(_row)
         return rows
 
@@ -525,7 +574,7 @@ class MeanDifferenceTable(Table):
         df: pd.DataFrame,
         var_list: list,
         group_var: str,
-        diff_pairs: list[tuple] = None,
+        diff_pairs: list[tuple] | None = None,
         alternative: str = "two-sided",
     ):
         """
@@ -557,12 +606,13 @@ class MeanDifferenceTable(Table):
         self.var_list = var_list
         if self.ngroups > 2 and not diff_pairs:
             raise ValueError(
-                "diff_pairs must be provided if there are more than 2 groups"
+                "`diff_pairs` argument must be provided if there are more than 2 groups"
             )
         if self.ngroups < 2:
             raise ValueError("There must be at least two groups")
         self.alternative = alternative
         self.type_gdf = df.groupby(group_var)
+        # adjust these to only count non-null values
         self.grp_sizes = self.type_gdf.size()
         self.grp_sizes["Overall Mean"] = df.shape[0]
         self.means = self.type_gdf[var_list].mean().T
@@ -584,9 +634,9 @@ class MeanDifferenceTable(Table):
         self._get_diffs()
         self.ncolumns = self.means.shape[1]
         self.columns = self.means.columns
-
+        diff_word = "Differences" if len(var_list) > 1 else "Difference"
         self.add_multicolumns(
-            ["Means", "", "Differences"], [self.ngroups, 1, self.ndiffs]
+            ["Means", "", diff_word], [self.ngroups, 1, self.ndiffs]
         )  # may need to move this later if we make including the total mean optional
         self.add_latex_line(
             (
@@ -724,11 +774,12 @@ class MeanDifferenceTable(Table):
             sem_row = [""]
             _row = [self._index_labels.get(_index, _index)]
             for col, value in zip(row.index, row.values):
-                formated_val = self._format_value(_index, col, value)
+                formatted_val = self._format_value(_index, col, value)
                 if self.show_standard_errors:
                     try:
                         se = self.sem.loc[_index, col]
-                        sem_row.append(f"({se:,.{self.sig_digits}f})")
+                        formatted_se = self._format_value(_index, col, se)
+                        sem_row.append(f"({formatted_se})")
                     except KeyError:
                         sem_row.append("")
                 if self.show_stars:
@@ -737,8 +788,8 @@ class MeanDifferenceTable(Table):
                         stars = pstars(pval, self.p_values)
                     except KeyError:
                         stars = ""
-                    formated_val = f"{formated_val}{stars}"
-                _row.append(formated_val)
+                    formatted_val = f"{formatted_val}{stars}"
+                _row.append(formatted_val)
             rows.append(_row)
             if self.show_standard_errors:
                 rows.append(sem_row)
@@ -773,11 +824,11 @@ class ModelTable(Table):
         self,
         models: list,
         param_value_attr: str = "params",
-        param_names_attr: str = None,
-        std_err_attr: str = None,
-        ci_attr: str = None,
-        model_names: list[str] = None,
-        model_summary_vars: dict = None,  # things like r2, T, etc.
+        param_names_attr: str | None = None,
+        std_err_attr: str | None = None,
+        ci_attr: str | None = None,
+        model_names: list[str] | None = None,
+        model_summary_vars: dict | None = None,  # things like r2, T, etc.
     ):
         self.models = models
         self.ncolumns = len(models)
