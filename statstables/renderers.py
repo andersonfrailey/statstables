@@ -280,13 +280,16 @@ class ASCIIRenderer(Renderer):
     def generate_header(self) -> str:
         header = "=" * (self._len + 2) + "\n"
         for col, span in self.table._multicolumns:
-            header += "|"
+            header += "|" + (
+                " " * self.max_index_name_cell_size * self.table.include_index
+            )
 
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
-                if self.table.include_index:
-                    _size += self.max_index_name_cell_size
-                header += f"{c:^{_size}}" + "|\n"
+                # if self.table.include_index:
+                #     _size += self.max_body_cell_size *
+                header += f"{c:^{_size}}"
+            header += "|\n"
         if self.table.show_columns:
             header += "|"
             header += (
