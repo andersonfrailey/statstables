@@ -281,12 +281,12 @@ class ASCIIRenderer(Renderer):
             st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
             + "\n"
         )
-        # underlines = st.STParams["ascii_border_char"]
+        underlines = st.STParams["ascii_border_char"]
         for col, span in self.table._multicolumns:
             header += st.STParams["ascii_border_char"] + (
                 " " * self.max_index_name_cell_size * self.table.include_index
             )
-            # underlines += " " * self.max_index_name_cell_size * self.table.include_index
+            underlines += " " * self.max_index_name_cell_size * self.table.include_index
 
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
@@ -294,8 +294,10 @@ class ASCIIRenderer(Renderer):
                 #     _size += self.max_body_cell_size *
                 header += f"{c:^{_size}}"
                 # underlines += f"{'-' * len(c):^{_size}}"
+                underlines += f"{'-' * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
-            # header += underlines + f"{st.STParams['ascii_border_char']}\n"
+            if st.STParams["underline_multicolumn"]:
+                header += underlines + f"{st.STParams['ascii_border_char']}\n"
         if self.table.show_columns:
             header += st.STParams["ascii_border_char"]
             header += (
