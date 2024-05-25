@@ -1,6 +1,6 @@
 from statstables import tables, renderers, utils
 
-__all__ = ["params"]
+__all__ = ["STParams"]
 
 
 class Params(dict):
@@ -14,5 +14,9 @@ class Params(dict):
         return dict.__getitem__(self, key)
 
 
-params = Params()
-params["ascii_padding"] = 2
+STParams = Params()
+STParams["ascii_padding"] = 2
+STParams["ascii_header_char"] = "="
+STParams["ascii_footer_char"] = "-"
+STParams["ascii_border_char"] = "|"
+STParams["ascii_mid_rule_char"] = "-"

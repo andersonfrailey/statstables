@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-import statstables
+import statstables as st
 
 
 class Renderer(ABC):
@@ -246,7 +246,7 @@ class ASCIIRenderer(Renderer):
     def __init__(self, table):
         self.table = table
         # number of spaces to place on either side of cell values
-        self.padding = statstables.params["ascii_padding"]
+        self.padding = st.STParams["ascii_padding"]
         self.ncolumns = self.table.ncolumns + int(self.table.include_index)
         self.reset_size_parameters()
 
@@ -277,26 +277,35 @@ class ASCIIRenderer(Renderer):
         return out
 
     def generate_header(self) -> str:
-        header = "=" * (self._len + 2) + "\n"
+        header = st.STParams["ascii_header_char"] * (self._len + 2) + "\n"
+        # underlines = st.STParams["ascii_border_char"]
         for col, span in self.table._multicolumns:
-            header += "|" + (
+            header += st.STParams["ascii_border_char"] + (
                 " " * self.max_index_name_cell_size * self.table.include_index
             )
+            # underlines += " " * self.max_index_name_cell_size * self.table.include_index
 
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
                 # if self.table.include_index:
                 #     _size += self.max_body_cell_size *
                 header += f"{c:^{_size}}"
-            header += "|\n"
+                # underlines += f"{'-' * len(c):^{_size}}"
+            header += f"{st.STParams['ascii_border_char']}\n"
+            # header += underlines + f"{st.STParams['ascii_border_char']}\n"
         if self.table.show_columns:
-            header += "|"
+            header += st.STParams["ascii_border_char"]
             header += (
                 f"{self.table.index_name:^{self.max_index_name_cell_size}}"
             ) * self.table.include_index
             for col in self.table.columns:
                 header += f"{self.table._column_labels.get(col, col):^{self.max_body_cell_size}}"
-            header += "|\n"
+            header += f"{st.STParams['ascii_border_char']}\n"
+            header += (
+                st.STParams["ascii_border_char"]
+                + st.STParams["ascii_mid_rule_char"] * (self._len)
+                + f"{st.STParams['ascii_border_char']}\n"
+            )
         return header
 
     # get the length of the header lines by counting number of characters in each column
@@ -304,17 +313,17 @@ class ASCIIRenderer(Renderer):
         rows = self.table._create_rows()
         body = ""
         for row in rows:
-            body += "|"
+            body += st.STParams["ascii_border_char"]
             for i, r in enumerate(row):
                 _size = self.max_body_cell_size
                 if i == 0 and self.table.include_index:
                     _size = self.max_index_name_cell_size
                 body += f"{r:^{_size}}"
-            body += "|\n"
+            body += f"{st.STParams['ascii_border_char']}\n"
         return body
 
     def generate_footer(self) -> str:
-        footer = "-" * (self._len + 2)
+        footer = st.STParams["ascii_footer_char"] * (self._len + 2)
         if self.table.notes:
             for note, alignment, _ in self.table.notes:
                 footer += "\n"
