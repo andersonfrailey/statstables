@@ -277,7 +277,10 @@ class ASCIIRenderer(Renderer):
         return out
 
     def generate_header(self) -> str:
-        header = st.STParams["ascii_header_char"] * (self._len + 2) + "\n"
+        header = (
+            st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
+            + "\n"
+        )
         # underlines = st.STParams["ascii_border_char"]
         for col, span in self.table._multicolumns:
             header += st.STParams["ascii_border_char"] + (
@@ -323,7 +326,7 @@ class ASCIIRenderer(Renderer):
         return body
 
     def generate_footer(self) -> str:
-        footer = st.STParams["ascii_footer_char"] * (self._len + 2)
+        footer = st.STParams["ascii_footer_char"] * (self._len + (2 * self._border_len))
         if self.table.notes:
             for note, alignment, _ in self.table.notes:
                 footer += "\n"
@@ -368,3 +371,4 @@ class ASCIIRenderer(Renderer):
             self.max_row_len = max(self.max_row_len, col_len)
         self._len = self.max_body_cell_size * self.table.ncolumns
         self._len += self.max_index_name_cell_size
+        self._border_len = len(st.STParams["ascii_border_char"])
