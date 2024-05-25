@@ -17,7 +17,7 @@ class Params(dict):
 STParams = Params()
 STParams["ascii_padding"] = 2
 STParams["ascii_header_char"] = "="
-STParams["ascii_footer_char"] = "-"
+STParams["ascii_footer_char"] = "="
 STParams["ascii_border_char"] = ""
 STParams["ascii_mid_rule_char"] = "-"
 STParams["underline_multicolumn"] = False
