@@ -2,7 +2,7 @@
 
 **This package is in the pre-alpha stage. There are many bugs, not all the features have been implemented yet, and there will likely be significant refactoring which may break backwards compatibility. Please use it anyway.**
 
-A Python package for making nice LaTeX and HTML tables.
+A Python package for making nice LaTeX, HTML, and ASCII text tables.
 
 This package is inspired by the [stargazer Python package](https://github.com/StatsReporting/stargazer/tree/master) (and by extension the [stargazer R package](https://cran.r-project.org/web/packages/stargazer/vignettes/stargazer.pdf) that inspired that). While `stargazer` is great for formatting output from the models it supports, `statstables` is intended to make it easier to format all the other tables you may need.
 
