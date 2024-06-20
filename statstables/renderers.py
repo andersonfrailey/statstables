@@ -69,6 +69,8 @@ class LatexRenderer(Renderer):
             content_columns = "l" + content_columns
         header += "\\begin{tabular}{" + content_columns + "}\n"
         header += "  \\toprule\n"
+        if st.STParams["double_top_rule"]:
+            header += "  \\toprule\n"
         for col, spans in self.table._multicolumns:
             header += ("  " + self.table.index_name + " & ") * self.table.include_index
             header += " & ".join(
@@ -117,6 +119,8 @@ class LatexRenderer(Renderer):
             for line in self.table.custom_lines["after-footer"]:
                 footer += self._create_line(line)
             footer += "  \\bottomrule\n"
+            if st.STParams["double_bottom_rule"]:
+                footer += "  \\bottomrule\n"
         if self.table.notes:
             for note, alignment, escape in self.table.notes:
                 align_cols = self.table.ncolumns + self.table.include_index
@@ -281,6 +285,11 @@ class ASCIIRenderer(Renderer):
             st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
             + "\n"
         )
+        if st.STParams["double_top_rule"]:
+            header = (
+                st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
+                + "\n"
+            )
         underlines = st.STParams["ascii_border_char"]
         for col, span in self.table._multicolumns:
             header += st.STParams["ascii_border_char"] + (
@@ -329,6 +338,10 @@ class ASCIIRenderer(Renderer):
 
     def generate_footer(self) -> str:
         footer = st.STParams["ascii_footer_char"] * (self._len + (2 * self._border_len))
+        if st.STParams["double_bottom_rule"]:
+            footer = st.STParams["ascii_footer_char"] * (
+                self._len + (2 * self._border_len)
+            )
         if self.table.notes:
             for note, alignment, _ in self.table.notes:
                 footer += "\n"
