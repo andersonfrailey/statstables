@@ -30,7 +30,7 @@ class Table(ABC):
         self._index_labels = dict()
         self._column_labels = dict()
         self._multicolumns = []
-        self._multiindex = {}
+        # self._multiindex = []
         self._formatters = dict()
         self.notes = []
         self.custom_lines = defaultdict(list)
@@ -39,6 +39,14 @@ class Table(ABC):
         self.include_index = False
         self.index_name = ""
         self.show_columns = True
+
+    @property
+    def ncolumns(self) -> int:
+        return self._ncolumns
+
+    @ncolumns.setter
+    def ncolumns(self, ncolumns: int) -> None:
+        self._ncolumns = ncolumns
 
     @property
     def caption_location(self) -> str:
@@ -201,24 +209,24 @@ class Table(ABC):
         ), "The sum of spans must equal the number of columns"
         self._multicolumns.append((columns, spans))
 
-    def add_multiindex(self, index: list[str], spans: list[tuple]) -> None:
-        """
-        Add a multiindex to the table. This will be placed above the index column
-        in the table. The sum of the spans must equal the number of rows in the table.
+    # def add_multiindex(self, index: list[str], spans: list[tuple]) -> None:
+    #     """
+    #     Add a multiindex to the table. This will be placed above the index column
+    #     in the table. The sum of the spans must equal the number of rows in the table.
 
-        Parameters
-        ----------
-        index : list[str]
-            List of labels for the multiindex
-        spans : list[tuple]
-            List of tuples that indicate where the index should start and how many
-            rows it should span. The first element of the tuple should be the row
-            it starts and the second should be the number of rows it spans.
-        """
-        assert len(index) == len(spans), "index and spans must be the same length"
-        self._multiindex.append((index, spans))
-        for i, s in zip(index, spans):
-            self._multiindex[s[0]] = {"index": i, "end": s[1]}
+    #     Parameters
+    #     ----------
+    #     index : list[str]
+    #         List of labels for the multiindex
+    #     spans : list[tuple]
+    #         List of tuples that indicate where the index should start and how many
+    #         rows it should span. The first element of the tuple should be the row
+    #         it starts and the second should be the number of rows it spans.
+    #     """
+    #     assert len(index) == len(spans), "index and spans must be the same length"
+    #     self._multiindex.append((index, spans))
+    #     for i, s in zip(index, spans):
+    #         self._multiindex[s[0]] = {"index": i, "end": s[1]}
 
     def custom_formatters(self, formatters: dict) -> None:
         """
@@ -542,7 +550,7 @@ class GenericTable(Table):
     column/index naming
     """
 
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame | pd.Series):
         self.df = df
         self.ncolumns = df.shape[1]
         self.columns = df.columns
@@ -562,8 +570,8 @@ class GenericTable(Table):
                 _row.append(formated_val)
             if not self.include_index:
                 _row.pop(0)
-            if _index in self._multiindex.keys():
-                _row.insert(0, self._multiindex[_index]["index"])
+            # if _index in self._multiindex.keys():
+            #     _row.insert(0, self._multiindex[_index]["index"])
             rows.append(_row)
         return rows
 
