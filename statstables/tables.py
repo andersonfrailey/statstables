@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import warnings
+import statstables as st
 from abc import ABC, abstractmethod
 from scipy import stats
 from typing import Union
@@ -181,6 +181,7 @@ class Table(ABC):
         columns: str | list[str],
         spans: list[int] | None = None,
         formats: list[str] | None = None,
+        index: int = -1,
     ) -> None:
         """
         All columns that span multiple columns in the table. These will be placed
@@ -207,7 +208,15 @@ class Table(ABC):
         assert (
             sum(spans) == self.ncolumns
         ), "The sum of spans must equal the number of columns"
-        self._multicolumns.append((columns, spans))
+        self._multicolumns.insert(index, (columns, spans))
+
+    def remove_multicolumn(self, column=None, index=None) -> None:
+        if column is None and index is None:
+            raise ValueError("Either 'column' or 'index' must be provided")
+        if column is not None:
+            self._multicolumns.remove(column)
+        elif index is not None:
+            self._multicolumns.pop(index)
 
     # def add_multiindex(self, index: list[str], spans: list[tuple]) -> None:
     #     """
@@ -255,7 +264,13 @@ class Table(ABC):
         ), "Values in the formatters dict must be functions"
         self._formatters.update(formatters)
 
-    def add_note(self, note: str, alignment: str = "l", escape: bool = True) -> None:
+    def add_note(
+        self,
+        note: str,
+        alignment: str = "r",
+        escape: bool = True,
+        position: int | None = None,
+    ) -> None:
         """
         Adds a single line note to the bottom on the table, under the bottom line.
 
@@ -267,10 +282,14 @@ class Table(ABC):
             Which side of the table to align the note, by default "l"
         escape : bool, optional
             If true, a "\" is added LaTeX characters that must be escaped, by default True
+        position : int, optional
+            The position in the notes list to insert the note. Inserts note at the
+            end of the list by default.
         """
         assert isinstance(note, str), "Note must be a string"
         assert alignment in ["l", "c", "r"], "alignment must be 'l', 'c', or 'r'"
-        self.notes.append((note, alignment, escape))
+        _position = len(self.notes) if position is None else position
+        self.notes.insert(_position, (note, alignment, escape))
 
     def add_notes(self, notes: list[tuple]) -> None:
         """
@@ -307,7 +326,7 @@ class Table(ABC):
             self.notes.pop(index)
 
     def add_line(
-        self, line: list[str], location: str = "after-body", label: str = ""
+        self, line: list[str], location: str = "after-body", label: str = "", index=-1
     ) -> None:
         """
         Add a line to the table that will be rendered at the specified location.
@@ -328,7 +347,7 @@ class Table(ABC):
         """
         validate_line_location(location)
         assert len(line) == self.ncolumns, "Line must have the same number of columns"
-        self.custom_lines[location].append({"line": line, "label": label})
+        self.custom_lines[location].insert(index, {"line": line, "label": label})
 
     def remove_line(
         self, location: str, line: list | None = None, index: int | None = None
@@ -823,159 +842,166 @@ class SummaryTable(GenericTable):
 
 
 class ModelTable(Table):
-    """
-    A table that can be used to show the results of most models passed in, with
-    enough user guidance.
-    """
+    # stats that get included in the table footer
+    model_stats = [
+        ("observations", "Observations"),
+        ("ngroups", "N. of groups"),
+        ("r2", {"latex": "R^2", "html": "R<sup>2</sup>", "ascii": "R2"}),
+        (
+            "adjusted_r2",
+            {
+                "latex": "Adjusted R^2",
+                "html": "Adjusted R<sup>2</sup>",
+                "ascii": "Adjusted R2",
+            },
+        ),
+        (
+            "pseudo_r2",
+            {
+                "latex": "Pseudo R^2",
+                "html": "Pseudo R<sup>2</sup>",
+                "ascii": "Pseudo R2",
+            },
+        ),
+        ("fstat", "F Statistic"),
+        ("dof", "DoF"),
+    ]
 
-    def __init__(
-        self,
-        models: list,
-        param_value_attr: str = "params",
-        param_names_attr: str | None = None,
-        std_err_attr: str | None = None,
-        ci_attr: str | None = None,
-        model_names: list[str] | None = None,
-        model_summary_vars: dict | None = None,  # things like r2, T, etc.
-    ):
-        self.models = models
-        self.ncolumns = len(models)
-        self.ci_attr = ci_attr
-        self.columns = model_names
-        self.std_err_attr = std_err_attr
-        # extract data from each model
-        self._model_dict = {}
-        self._param_names = []
-        for i, mod in enumerate(models):
-            _params_dict = {}
-            _stders_dict = {}
-            _cis_dict = {}
-            _params = self._get_attr(mod, param_value_attr)
-            _names = self._get_attr(mod, param_names_attr)
-            _stders = self._get_attr(mod, std_err_attr)
-            # _cis = self._get_attr(mod, ci_attr)
-            for _name, _param, stder in zip(_names, _params, _stders):
-                if _name not in self._param_names:
-                    self._param_names.append(_name)
-                _params_dict[_name] = _param
-                _stders_dict[_name] = stder
-                # _cis_dict[_name] = ci
-            self._model_dict[i] = {"params": _params_dict, "std_errs": _stders_dict}
+    def __init__(self, models):
+        self.models = []
+        self.params = set()
+        self.ncolumns = len(models) + 1
+        dep_vars = []
+        for mod in models:
+            try:
+                mod_obj = st.SupportedModels[type(mod)](mod)
+                self.models.append(mod_obj)
+            except KeyError as e:
+                msg = (
+                    f"{type(mod)} is unsupported. To use custom models, "
+                    "add them to st.SupportedModels."
+                )
+                raise KeyError(msg) from e
+            self.params.update(mod_obj.param_labels)
+            dep_vars.append(mod_obj.dependent_variable)
+
+        self.all_param_labels = sorted(self.params)
+        self.include_index = False
         self.reset_params()
+        # check whether all dep_vars are the same
+        if all(var == dep_vars[0] for var in dep_vars):
+            self.dependent_variable_name = dep_vars[1]
 
-    def reset_params(self) -> None:
+    def reset_params(self):
         super().reset_params()
-        self.include_index = True
-        self.show_model_nums = True
-        self._model_nums = [f"({i})" for i in range(1, len(self.models) + 1)]
-        # if no column names are provided use the model numbers
-        if self.columns is None:
-            self.columns = self._model_nums
-            self.show_model_nums = False
+        self.show_r2 = True
+        self.show_adjusted_r2 = False
+        self.show_pseudo_r2 = True
+        self.show_dof = False
+        self.show_ses = True
+        self.show_cis = False
+        self.show_fstat = True
+        self.single_row = False
+        self.show_observations = True
+        self.show_ngroups = True
+        self.show_model_numbers = True
+        self._model_nums = [""] + [f"({i})" for i in range(1, len(self.models) + 1)]
+        self.columns = self._model_nums
+        self.param_labels = self.all_param_labels
 
-        self.single_line = False
-        self.parameter_order = self._param_names
-        self.show_standard_errors = True
+        self.p_values = [0.1, 0.05, 0.01]
+        self.show_stars = True
+        self.dependent_variable = ""
 
-    @property
-    def show_model_nums(self) -> bool:
-        """
-        If true, model numbers are included under the column names
-        """
-        return self._show_model_nums
+    def rename_covariates(self, names: dict) -> None:
+        self._index_labels = names
 
-    @show_model_nums.setter
-    def show_model_nums(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_model_nums = value
-
-    @property
-    def single_row(self) -> bool:
-        """
-        If true, the significance variable (either standard error or confience interval)
-        will be rendered on the same line as the parameter value
-        """
-        return self._single_row
-
-    @single_row.setter
-    def single_row(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._single_row = value
-
-    @property
-    def columns(self) -> list:
-        return self._columns
-
-    @columns.setter
-    def columns(self, column_labels: list[str]) -> None:
-        if not column_labels is None:
-            if not isinstance(column_labels, list):
-                raise TypeError("Column labels must be a list of strings")
-            for col in column_labels:
-                if not isinstance(col, str):
-                    raise ValueError("All column labels must be strings")
-        self._columns = column_labels
-
-    @property
-    def parameter_order(self) -> list:
-        return self._parameter_order
-
-    @parameter_order.setter
     def parameter_order(self, order: list) -> None:
-        if not order is None:
-            if not isinstance(order, list):
-                raise TypeError("Parameter order must be a list of strings")
-            for param in order:
-                if not isinstance(param, str):
-                    raise ValueError("All parameter names must be strings")
-            self._parameter_order = order
-
-    @property
-    def show_standard_errors(self) -> bool:
-        return self._show_standard_errors
-
-    @show_standard_errors.setter
-    def show_standard_errors(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_standard_errors = value
+        for p in order:
+            assert p in self.all_param_labels
+        self.param_labels = order
 
     def _create_rows(self):
         rows = []
-        for param in self.parameter_order:
-            _row = [self._index_labels.get(param, param)]
+        for param in self.param_labels:
+            row = [self._index_labels.get(param, param)]
             se_row = [""]
-            for col, mod in zip(self.columns, self._model_dict.values()):
-                param_val = mod["params"].get(param, "")
-                se_val = mod["std_errs"].get(param, "")
-                _row.append(self._format_value(param, col, param_val))
-                if isinstance(se_val, str):
-                    se_row.append(se_val)
-                else:
-                    se_row.append(f"({se_val:,.{self.sig_digits}f})")
-            rows.append(_row)
-            if self.show_standard_errors:
-                rows.append(se_row)
+            ci_row = [""]
+            for i, mod in enumerate(self.models):
+                if param not in mod.param_labels:
+                    row.append("")
+                    se_row.append("")
+                    ci_row.append("")
+                    continue
+                param_val = mod.params[param]
+                pvalue = mod.pvalues[param]
+                se = f"({mod.sterrs[param]:.{self.sig_digits}f})"
+                se_row.append(se)
+                ci_low = f"{mod.cis_low[param]:.{self.sig_digits}f}"
+                ci_high = f"{mod.cis_high[param]:.{self.sig_digits}f}"
+                ci = f"({ci_low}, {ci_high})"
+                ci_row.append(ci)
+                stars = pstars(pvalue, self.p_values)
+                row_val = (
+                    f"{self._format_value(param, i, param_val)}"
+                    + stars * self.show_stars
+                    + f" {se}" * self.single_row * self.show_ses
+                    + f" {ci}" * self.single_row * self.show_cis
+                )
 
+                row.append(row_val)
+            rows.append(row)
+            if self.show_ses and not self.single_row:
+                rows.append(se_row)
+            if self.show_cis and not self.single_row:
+                rows.append(ci_row)
         return rows
 
-    @staticmethod
-    def _get_attr(mod, attrstr):
-        if "." in attrstr:
-            attrs = attrstr.split(".")
-            for a in attrs:
-                mod = getattr(mod, a)
-        else:
-            mod = getattr(mod, attrstr)
-        return mod
+    def _create_stats_rows(self, renderer: str):
+        rows = []
+        for stat, name in self.model_stats:
+            _name = name
+            if isinstance(name, dict):
+                _name = name[renderer]
+            if not getattr(self, f"show_{stat}"):
+                continue
+            row = [_name]
+            for mod in self.models:
+                try:
+                    val = mod.get_formatted_value(stat, self.sig_digits)
+                    if stat == "fstat" and self.show_stars:
+                        stars = pstars(mod.fstat_pvalue, self.p_values)
+                        val = f"{val}{stars}"
+                    row.append(val)
+                except AttributeError:
+                    row.append("")
+            # only add the stat if at least one model has it
+            if not all(r == "" for r in row[1:]):
+                rows.append(row)
+        return rows
 
     @staticmethod
     def _render(render_func):
         def wrapper(self, **kwargs):
-            if self.show_model_nums:
-                self.add_line(self._model_nums, location="after-columns")
+            if self.show_stars:
+                _p = "p<"
+                if render_func.__name__ == "render_latex":
+                    _p = "p$<$"
+                stars = ", ".join(
+                    [
+                        f"{'*' * i}{_p}{p}"
+                        for i, p in enumerate(
+                            sorted(self.p_values, reverse=True), start=1
+                        )
+                    ]
+                )
+                stars_note = f"{stars}"
+                self.add_note(stars_note, alignment="r", escape=False, position=0)
+                _stars_note = (stars_note, "r", False)
             output = render_func(self, **kwargs)
-            if self.show_model_nums:
-                self.remove_line(location="after-columns", index=-1)
+            if self.show_stars:
+                self.remove_note(note=_stars_note)
+
             return output
 
         return wrapper
@@ -987,6 +1013,113 @@ class ModelTable(Table):
     @_render
     def render_html(self, outfile=None) -> Union[str, None]:
         return super().render_html(outfile)
+
+    @_render
+    def render_ascii(self) -> Union[str, None]:
+        return super().render_ascii()
+
+    ##### Properties #####
+    @property
+    def dependent_variable_name(self) -> str:
+        return self._dependent_variable_name
+
+    @dependent_variable_name.setter
+    def dependent_variable_name(self, name: str) -> None:
+        # remove current dependent variable from multicolumns
+        if len(self._multicolumns) > 0:
+            try:
+                col = (
+                    ["", f"Dependent Variable: {self.dependent_variable_name}"],
+                    [1, self.ncolumns - 1],
+                )
+                self.remove_multicolumn(col)
+            except ValueError:
+                pass
+        self._dependent_variable_name = name
+        self.add_multicolumns(
+            ["", f"Dependent Variable: {name}"], [1, self.ncolumns - 1], index=0
+        )
+
+    @property
+    def show_r2(self) -> bool:
+        return self._show_r2
+
+    @show_r2.setter
+    def show_r2(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_r2 = show
+
+    @property
+    def show_adjusted_r2(self) -> bool:
+        return self._show_adjusted_r2
+
+    @show_adjusted_r2.setter
+    def show_adjusted_r2(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_adjusted_r2 = show
+
+    @property
+    def show_dof(self) -> bool:
+        return self._show_dof
+
+    @show_dof.setter
+    def show_dof(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_dof = show
+
+    @property
+    def show_cis(self) -> bool:
+        return self._show_cis
+
+    @show_cis.setter
+    def show_cis(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_cis = show
+
+    @property
+    def show_ses(self) -> bool:
+        return self._show_ses
+
+    @show_ses.setter
+    def show_ses(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_ses = show
+
+    @property
+    def show_fstat(self) -> bool:
+        return self._show_fstat
+
+    @show_fstat.setter
+    def show_fstat(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_fstat = show
+
+    @property
+    def single_row(self) -> bool:
+        return self._single_row
+
+    @single_row.setter
+    def single_row(self, single: bool) -> None:
+        assert isinstance(single, bool)
+        self._single_row = single
+
+    @property
+    def show_observations(self) -> bool:
+        return self._show_observations
+
+    @show_observations.setter
+    def show_observations(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_observations = show
+
+    @property
+    def show_model_numbers(self) -> bool:
+        return self._show_model_numbers
+
+    @show_model_numbers.setter
+    def show_model_numbers(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_model_numbers = show
 
 
 class PanelTable:

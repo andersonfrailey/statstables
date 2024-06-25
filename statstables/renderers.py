@@ -1,5 +1,6 @@
-from abc import ABC, abstractmethod
 import statstables as st
+import textwrap
+from abc import ABC, abstractmethod
 
 
 class Renderer(ABC):
@@ -11,20 +12,16 @@ class Renderer(ABC):
         pass
 
     @abstractmethod
-    def generate_header(self) -> str:
-        ...
+    def generate_header(self) -> str: ...
 
     @abstractmethod
-    def generate_body(self) -> str:
-        ...
+    def generate_body(self) -> str: ...
 
     @abstractmethod
-    def generate_footer(self) -> str:
-        ...
+    def generate_footer(self) -> str: ...
 
     @abstractmethod
-    def _create_line(self, line) -> str:
-        ...
+    def _create_line(self, line) -> str: ...
 
 
 class LatexRenderer(Renderer):
@@ -107,10 +104,15 @@ class LatexRenderer(Renderer):
         row_str = ""
         for row in rows:
             row_str += "  " + " & ".join([self._escape(r) for r in row]) + " \\\\\n"
-        for line in self.table.custom_lines["after-body"]:
-            row_str += self._create_line(line)
         for line in self.table.custom_tex_lines["after-body"]:
             row_str += line
+        for line in self.table.custom_lines["after-body"]:
+            row_str += self._create_line(line)
+        if isinstance(self.table, st.tables.ModelTable):
+            row_str += "  \\midrule\n"
+            stats_rows = self.table._create_stats_rows(renderer="latex")
+            for row in stats_rows:
+                row_str += "  " + " & ".join([self._escape(r) for r in row]) + " \\\\\n"
         return row_str
 
     def generate_footer(self, only_tabular=False):
@@ -208,11 +210,23 @@ class HTMLRenderer(Renderer):
             for r in row:
                 row_str += f"      <td>{r}</td>\n"
             row_str += "    </tr>\n"
-        for line in self.table.custom_lines["after-body"]:
-            row_str += self._create_line(line)
         for line in self.table.custom_html_lines["after-body"]:
             row_str += line
-            pass
+        for line in self.table.custom_lines["after-body"]:
+            row_str += self._create_line(line)
+        if isinstance(self.table, st.tables.ModelTable):
+            stats_rows = self.table._create_stats_rows(renderer="html")
+            # insert a horizontal rule before the stats rows
+            row_str += "    <tr>\n"
+            row_str += (
+                "      <td colspan='100%' style='border-top: 1px solid black;'></td>\n"
+            )
+            row_str += "    </tr>\n"
+            for row in stats_rows:
+                row_str += "    <tr>\n"
+                for r in row:
+                    row_str += f"      <td>{r}</td>\n"
+                row_str += "    </tr>\n"
         return row_str
 
     def generate_footer(self):
@@ -225,12 +239,13 @@ class HTMLRenderer(Renderer):
         if self.table.notes:
             ncols = self.table.ncolumns + self.table.include_index
             for note, alignment, _ in self.table.notes:
-                # TODO: This doesn't actually align where expected in a notebook. Fix.
-                footer += (
-                    f'    <tr><td colspan="{ncols}" '
-                    f'style="text-align:{self.ALIGNMENTS[alignment]};'
-                    f'"><i>{note}</i></td></tr>\n'
-                )
+                _notes = textwrap.wrap(note, width=st.STParams["max_html_notes_length"])
+                for _note in _notes:
+                    footer += (
+                        f'    <tr><td colspan="{ncols}" '
+                        f'style="text-align:{self.ALIGNMENTS[alignment]};'
+                        f'"><i>{_note}</i></td></tr>\n'
+                    )
         footer += "  </tbody>\n"
         return footer
 
@@ -334,6 +349,35 @@ class ASCIIRenderer(Renderer):
                     _size = self.max_index_name_cell_size
                 body += f"{r:^{_size}}"
             body += f"{st.STParams['ascii_border_char']}\n"
+        if self.table.custom_lines["after-body"]:
+            body += (
+                st.STParams["ascii_mid_rule_char"]
+                * (self._len + (2 * self._border_len))
+                + "\n"
+            )
+            for line in self.table.custom_lines["after-body"]:
+                for i, l in enumerate(line["line"]):
+                    _size = self.max_body_cell_size
+                    val = l
+                    if i == 0 and self.table.include_index:
+                        _size = self.max_index_name_cell_size
+                        val = line["label"]
+                    body += f"{val:^{_size}}"
+                body += "\n"
+        if isinstance(self.table, st.tables.ModelTable):
+            stats_rows = self.table._create_stats_rows(renderer="ascii")
+            body += (
+                st.STParams["ascii_mid_rule_char"]
+                * (self._len + (2 * self._border_len))
+                + "\n"
+            )
+            for row in stats_rows:
+                for i, r in enumerate(row):
+                    _size = self.max_body_cell_size
+                    if i == 0 and self.table.include_index:
+                        _size = self.max_index_name_cell_size
+                    body += f"{r:^{_size}}"
+                body += f"{st.STParams['ascii_border_char']}\n"
         return body
 
     def generate_footer(self) -> str:
@@ -344,12 +388,17 @@ class ASCIIRenderer(Renderer):
             )
         if self.table.notes:
             for note, alignment, _ in self.table.notes:
-                footer += "\n"
+                # footer += "\n"
+                notes = textwrap.wrap(
+                    note, width=min(self._len, st.STParams["max_ascii_notes_length"])
+                )
                 _alignment = self.ALIGNMENTS[alignment]
-                footer += f"{note:{_alignment}{self._len}}"
+                for _note in notes:
+                    footer += f"\n{_note:{_alignment}{self._len}}"
         return footer
 
     def _create_line(self, line) -> str:
+        # TODO: make this work
         return ""
 
     def _get_table_widths(self) -> None:
@@ -367,6 +416,19 @@ class ASCIIRenderer(Renderer):
                         self.max_index_name_cell_size, cell_size
                     )
             self.max_row_len = max(self.max_row_len, row_len)
+        if isinstance(self.table, st.tables.ModelTable):
+            stats_rows = self.table._create_stats_rows(renderer="ascii")
+            for row in stats_rows:
+                row_len = 0
+                for i, cell in enumerate(row):
+                    cell_size = len(str(cell)) + (self.padding * 2)
+                    self.max_body_cell_size = max(self.max_body_cell_size, cell_size)
+                    row_len += cell_size
+                    if i == 0 and self.table.include_index:
+                        self.max_index_name_cell_size = max(
+                            self.max_index_name_cell_size, cell_size
+                        )
+                self.max_row_len = max(self.max_row_len, row_len)
 
         if self.table.include_index:
             index_name_size = len(str(self.table.index_name)) + (self.padding * 2)
