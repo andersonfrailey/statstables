@@ -367,25 +367,11 @@ class ASCIIRenderer(Renderer):
                 else:
                     body += f"{r:^{_size}}"
             body += f"{st.STParams['ascii_border_char']}\n"
+
         if self.table.custom_lines["after-body"]:
-            body += (
-                st.STParams["ascii_mid_rule_char"]
-                * (self._len + (2 * self._border_len))
-                + "\n"
-            )
             for line in self.table.custom_lines["after-body"]:
-                for i, l in enumerate(line["line"]):
-                    _size = self.max_body_cell_size
-                    # _align = "^"
-                    val = l
-                    if i == 0 and self.table.include_index:
-                        _size = self.max_index_name_cell_size - self.padding
-                        # _align = "<"
-                        val = line["label"]
-                        body += " " * self.padding + f" {val:<{_size}}"
-                    else:
-                        body += f"{val:^{_size}}"
-                body += "\n"
+                body += self._create_line(line)
+
         if isinstance(self.table, st.tables.ModelTable):
             stats_rows = self.table._create_stats_rows(renderer="ascii")
             body += (
@@ -408,10 +394,22 @@ class ASCIIRenderer(Renderer):
     def generate_footer(self) -> str:
         footer = st.STParams["ascii_footer_char"] * (self._len + (2 * self._border_len))
         if st.STParams["double_bottom_rule"]:
-            footer = st.STParams["ascii_footer_char"] * (
+            footer += st.STParams["ascii_footer_char"] * (
                 self._len + (2 * self._border_len)
             )
+        if self.table.custom_lines["after-footer"]:
+            footer += "\n"
+            for line in self.table.custom_lines["after-footer"]:
+                footer += self._create_line(line)
+            footer += st.STParams["ascii_footer_char"] * (
+                self._len + (2 * self._border_len)
+            )
+            if st.STParams["double_bottom_rule"]:
+                footer += st.STParams["ascii_footer_char"] * (
+                    self._len + (2 * self._border_len)
+                )
         if self.table.notes:
+            footer += "\n"
             for note, alignment, _ in self.table.notes:
                 notes = textwrap.wrap(
                     note, width=min(self._len, st.STParams["max_ascii_notes_length"])
@@ -422,8 +420,16 @@ class ASCIIRenderer(Renderer):
         return footer
 
     def _create_line(self, line) -> str:
-        # TODO: make this work
-        return ""
+        _line = st.STParams["ascii_border_char"]
+        if self.table.include_index:
+            _line += (
+                " " * self.padding
+                + f"{line['label']:<{self.max_index_name_cell_size - self.padding}}"
+            )
+        for l in line["line"]:
+            _line += f"{l:^{self.max_body_cell_size}}"
+        _line += st.STParams["ascii_border_char"] + "\n"
+        return _line
 
     def _get_table_widths(self) -> None:
         self.reset_size_parameters()
