@@ -26,7 +26,7 @@ ModelTypes: TypeAlias = (
     | Any
 )
 
-# TODO: Eventually automatically add a line saying what type of model it is
+# model stats that should always be formatted as integers
 INT_VARS = ["observations"]
 
 
@@ -49,9 +49,12 @@ class ModelData(ABC):
         """
         Get a formatted value for the table
         """
+        value = getattr(self, stat)
         if stat in INT_VARS:
-            return f"{int(getattr(self, stat))}"
-        return f"{getattr(self, stat):.{sig_digits}f}"
+            return f"{int(value)}"
+        if isinstance(value, str):
+            return f"{value}"
+        return f"{value:.{sig_digits}f}"
 
     def __getitem__(self, name: str) -> Any:
         return self.data[name]
@@ -62,18 +65,6 @@ class ModelData(ABC):
         except KeyError:
             raise AttributeError(f"ModelData object has no attribute {name}")
 
-
-# information every model must have
-# REQUIRED_INFO = [
-#     "params",
-#     "param_labels",
-#     "sterrs",
-#     "r2",
-#     "pvalues",
-#     "cis_low",
-#     "cis_high",
-#     "observations",
-# ]
 
 STATSMODELS_MAP = {
     "params": "params",
@@ -119,16 +110,19 @@ class StatsModelsData(ModelData):
         self.data["cis_low"] = self.model.conf_int()[0]
         self.data["cis_high"] = self.model.conf_int()[1]
         self.data["dependent_variable"] = self.model.model.endog_names
+        self.data["model_type"] = self.model.model.__class__.__name__
 
 
 LINEAR_MODELS_MAP = {
     "params": "params",
-    "p_values": "pvalues",
+    "pvalues": "pvalues",
     "sterrs": "std_errors",
     "r2": "rsquared",
+    "adjusted_r2": "rsquared_adj",
     "degree_freedom": "df_model",
     "degree_freedom_resid": "df_resid",
     "observations": "nobs",
+    "model_type": "_method",
 }
 
 
@@ -161,3 +155,5 @@ class LinearModelsData(ModelData):
         self.data["cis_low"] = self.model.conf_int()["lower"]
         self.data["cis_high"] = self.model.conf_int()["upper"]
         self.data["dependent_variable"] = self.model.summary.tables[0].data[0][1]
+        self.data["fstat"] = self.model.f_statistic.stat
+        self.data["fstat_pvalue"] = self.model.f_statistic.pval

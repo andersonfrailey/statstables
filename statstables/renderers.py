@@ -68,8 +68,9 @@ class LatexRenderer(Renderer):
         header += "  \\toprule\n"
         if st.STParams["double_top_rule"]:
             header += "  \\toprule\n"
-        for col, spans in self.table._multicolumns:
+        for col, spans, underline in self.table._multicolumns:
             header += ("  " + self.table.index_name + " & ") * self.table.include_index
+            # TODO: Implement underline
             header += " & ".join(
                 [
                     f"\\multicolumn{{{s}}}{{c}}{{{self._escape(c)}}}"
@@ -171,14 +172,18 @@ class HTMLRenderer(Renderer):
     def generate_header(self):
         header = "<table>\n"
         header += "  <thead>\n"
-        for col, spans in self.table._multicolumns:
+        for col, spans, underline in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
                 f"      <th>{self.table.index_name}</th>\n"
             ) * self.table.include_index
+            th = '<th colspan="{s}" style="text-align:center;">{c}</th>'
+            if underline:
+                th = '<th colspan="{s}" style="text-align:center;"><u>{c}</u></th>'
             header += "      " + " ".join(
                 [
-                    f'<th colspan="{s}" style="text-align:center;">{c}</th>'
+                    # f'<th colspan="{s}" style="text-align:center;">{c}</th>'
+                    th.format(c=c, s=s)
                     for c, s in zip(col, spans)
                 ]
             )
@@ -208,7 +213,7 @@ class HTMLRenderer(Renderer):
         for row in rows:
             row_str += "    <tr>\n"
             for r in row:
-                row_str += f"      <td>{r}</td>\n"
+                row_str += f'      <td style="text-align:center;">{r}</td>\n'
             row_str += "    </tr>\n"
         for line in self.table.custom_html_lines["after-body"]:
             row_str += line
@@ -225,7 +230,7 @@ class HTMLRenderer(Renderer):
             for row in stats_rows:
                 row_str += "    <tr>\n"
                 for r in row:
-                    row_str += f"      <td>{r}</td>\n"
+                    row_str += f'      <td style="text-align:center;">{r}</td>\n'
                 row_str += "    </tr>\n"
         return row_str
 
@@ -305,12 +310,16 @@ class ASCIIRenderer(Renderer):
                 st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
                 + "\n"
             )
-        underlines = st.STParams["ascii_border_char"]
-        for col, span in self.table._multicolumns:
+        # underlines = st.STParams["ascii_border_char"]
+        for col, span, underline in self.table._multicolumns:
             header += st.STParams["ascii_border_char"] + (
                 " " * self.max_index_name_cell_size * self.table.include_index
             )
-            underlines += " " * self.max_index_name_cell_size * self.table.include_index
+            # underlines += " " * self.max_index_name_cell_size * self.table.include_index
+            underlines = (
+                st.STParams["ascii_border_char"]
+                + " " * self.max_index_name_cell_size * self.table.include_index
+            )
 
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
@@ -320,7 +329,8 @@ class ASCIIRenderer(Renderer):
                 # underlines += f"{'-' * len(c):^{_size}}"
                 underlines += f"{'-' * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
-            if st.STParams["underline_multicolumn"]:
+            # if st.STParams["underline_multicolumn"]:
+            if underline:
                 header += underlines + f"{st.STParams['ascii_border_char']}\n"
         if self.table.show_columns:
             header += st.STParams["ascii_border_char"]
@@ -372,6 +382,7 @@ class ASCIIRenderer(Renderer):
                 + "\n"
             )
             for row in stats_rows:
+                body += f"{st.STParams['ascii_border_char']}"
                 for i, r in enumerate(row):
                     _size = self.max_body_cell_size
                     if i == 0 and self.table.include_index:
@@ -388,7 +399,6 @@ class ASCIIRenderer(Renderer):
             )
         if self.table.notes:
             for note, alignment, _ in self.table.notes:
-                # footer += "\n"
                 notes = textwrap.wrap(
                     note, width=min(self._len, st.STParams["max_ascii_notes_length"])
                 )

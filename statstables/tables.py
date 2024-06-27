@@ -181,7 +181,8 @@ class Table(ABC):
         columns: str | list[str],
         spans: list[int] | None = None,
         formats: list[str] | None = None,
-        index: int = -1,
+        position: int | None = None,
+        underline: bool = True,
     ) -> None:
         """
         All columns that span multiple columns in the table. These will be placed
@@ -208,7 +209,8 @@ class Table(ABC):
         assert (
             sum(spans) == self.ncolumns
         ), "The sum of spans must equal the number of columns"
-        self._multicolumns.insert(index, (columns, spans))
+        _position = len(self._multicolumns) if position is None else position
+        self._multicolumns.insert(_position, (columns, spans, underline))
 
     def remove_multicolumn(self, column=None, index=None) -> None:
         if column is None and index is None:
@@ -326,7 +328,11 @@ class Table(ABC):
             self.notes.pop(index)
 
     def add_line(
-        self, line: list[str], location: str = "after-body", label: str = "", index=-1
+        self,
+        line: list[str],
+        location: str = "after-body",
+        label: str = "",
+        position: int | None = None,
     ) -> None:
         """
         Add a line to the table that will be rendered at the specified location.
@@ -347,7 +353,8 @@ class Table(ABC):
         """
         validate_line_location(location)
         assert len(line) == self.ncolumns, "Line must have the same number of columns"
-        self.custom_lines[location].insert(index, {"line": line, "label": label})
+        _position = len(self.custom_lines[location]) if position is None else position
+        self.custom_lines[location].insert(_position, {"line": line, "label": label})
 
     def remove_line(
         self, location: str, line: list | None = None, index: int | None = None
@@ -865,12 +872,13 @@ class ModelTable(Table):
         ),
         ("fstat", "F Statistic"),
         ("dof", "DoF"),
+        ("model_type", "Model"),
     ]
 
     def __init__(self, models):
         self.models = []
         self.params = set()
-        self.ncolumns = len(models) + 1
+        self.ncolumns = len(models)
         dep_vars = []
         for mod in models:
             try:
@@ -879,18 +887,17 @@ class ModelTable(Table):
             except KeyError as e:
                 msg = (
                     f"{type(mod)} is unsupported. To use custom models, "
-                    "add them to st.SupportedModels."
+                    "add them to the `st.SupportedModels` dictionary."
                 )
                 raise KeyError(msg) from e
             self.params.update(mod_obj.param_labels)
             dep_vars.append(mod_obj.dependent_variable)
 
         self.all_param_labels = sorted(self.params)
-        self.include_index = False
         self.reset_params()
         # check whether all dep_vars are the same
         if all(var == dep_vars[0] for var in dep_vars):
-            self.dependent_variable_name = dep_vars[1]
+            self.dependent_variable_name = dep_vars[0]
 
     def reset_params(self):
         super().reset_params()
@@ -905,13 +912,15 @@ class ModelTable(Table):
         self.show_observations = True
         self.show_ngroups = True
         self.show_model_numbers = True
-        self._model_nums = [""] + [f"({i})" for i in range(1, len(self.models) + 1)]
+        self._model_nums = [f"({i})" for i in range(1, len(self.models) + 1)]
         self.columns = self._model_nums
         self.param_labels = self.all_param_labels
 
         self.p_values = [0.1, 0.05, 0.01]
         self.show_stars = True
+        self.show_model_type = True
         self.dependent_variable = ""
+        self.include_index = True
 
     def rename_covariates(self, names: dict) -> None:
         self._index_labels = names
@@ -1036,9 +1045,10 @@ class ModelTable(Table):
             except ValueError:
                 pass
         self._dependent_variable_name = name
-        self.add_multicolumns(
-            ["", f"Dependent Variable: {name}"], [1, self.ncolumns - 1], index=0
-        )
+        if name != "":
+            self.add_multicolumns(
+                ["", f"Dependent Variable: {name}"], [1, self.ncolumns - 1], position=0
+            )
 
     @property
     def show_r2(self) -> bool:
@@ -1120,6 +1130,15 @@ class ModelTable(Table):
     def show_model_numbers(self, show: bool) -> None:
         assert isinstance(show, bool)
         self._show_model_numbers = show
+
+    @property
+    def show_model_type(self) -> bool:
+        return self._show_model_type
+
+    @show_model_type.setter
+    def show_model_type(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_model_type = show
 
 
 class PanelTable:
