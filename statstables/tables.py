@@ -3,7 +3,7 @@ import numpy as np
 import statstables as st
 from abc import ABC, abstractmethod
 from scipy import stats
-from typing import Union
+from typing import Union, Callable
 from collections import defaultdict
 from pathlib import Path
 from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
@@ -850,10 +850,11 @@ class SummaryTable(GenericTable):
 
 class ModelTable(Table):
     # stats that get included in the table footer
+    # configuration  is (name of the attribute, label, whether it has a p-value)
     model_stats = [
-        ("observations", "Observations"),
-        ("ngroups", "N. of groups"),
-        ("r2", {"latex": "R^2", "html": "R<sup>2</sup>", "ascii": "R2"}),
+        ("observations", "Observations", False),
+        ("ngroups", "N. of groups", False),
+        ("r2", {"latex": "R^2", "html": "R<sup>2</sup>", "ascii": "R2"}, False),
         (
             "adjusted_r2",
             {
@@ -861,6 +862,7 @@ class ModelTable(Table):
                 "html": "Adjusted R<sup>2</sup>",
                 "ascii": "Adjusted R2",
             },
+            False,
         ),
         (
             "pseudo_r2",
@@ -869,13 +871,31 @@ class ModelTable(Table):
                 "html": "Pseudo R<sup>2</sup>",
                 "ascii": "Pseudo R2",
             },
+            False,
         ),
-        ("fstat", "F Statistic"),
-        ("dof", "DoF"),
-        ("model_type", "Model"),
+        ("fstat", "F Statistic", True),
+        ("dof", "DoF", False),
+        ("model_type", "Model", False),
     ]
 
-    def __init__(self, models):
+    def __init__(self, models: list):
+        """
+        Initialize an instance of the ModelsTable class.
+
+        Parameters
+        ----------
+        models : list
+            List of the models to include in the table. Each item in the list should
+            be a fitted model of one of the supported types (see `st.SupportedModels`).
+            If a type is not natively supported, it can be added to the `st.SupportedModels`
+            dictionary to still work with this table.
+
+        Raises
+        ------
+        KeyError
+            Raised if a model is not supported. To use custom models, add them to the
+            `st.SupportedModels` dictionary.
+        """
         self.models = []
         self.params = set()
         self.ncolumns = len(models)
@@ -895,7 +915,8 @@ class ModelTable(Table):
 
         self.all_param_labels = sorted(self.params)
         self.reset_params()
-        # check whether all dep_vars are the same
+        # check whether all dep_vars are the same. If they are, display the variable
+        # name by default.
         if all(var == dep_vars[0] for var in dep_vars):
             self.dependent_variable_name = dep_vars[0]
 
@@ -923,9 +944,28 @@ class ModelTable(Table):
         self.include_index = True
 
     def rename_covariates(self, names: dict) -> None:
+        """
+        Dictionary renaming the covariate labels in the table. The format should be:
+        {parameter_name: desired_label}. If a covariate is not in the dictionary,
+        the parameter name will be used.
+
+        Parameters
+        ----------
+        names : dict
+            Dictionary containing the new names for the covariates
+        """
         self._index_labels = names
 
     def parameter_order(self, order: list) -> None:
+        """
+        Set the order of the parameters in the table. An error will be raised if
+        the parameter is not in any of the models.
+
+        Parameters
+        ----------
+        order : list
+            List of the parameters in the order you want them to appear in the table.
+        """
         for p in order:
             assert p in self.all_param_labels
         self.param_labels = order
@@ -966,9 +1006,22 @@ class ModelTable(Table):
                 rows.append(ci_row)
         return rows
 
-    def _create_stats_rows(self, renderer: str):
+    def _create_stats_rows(self, renderer: str) -> list:
+        """
+        Internal method to create rows for model statistics.
+
+        Parameters
+        ----------
+        renderer : str
+            The type of renderer being used. Should be 'latex', 'html', or 'ascii'
+
+        Returns
+        -------
+        list
+            List containing each row of statistics
+        """
         rows = []
-        for stat, name in self.model_stats:
+        for stat, name, pvalue in self.model_stats:
             _name = name
             if isinstance(name, dict):
                 _name = name[renderer]
@@ -978,19 +1031,29 @@ class ModelTable(Table):
             for mod in self.models:
                 try:
                     val = mod.get_formatted_value(stat, self.sig_digits)
-                    if stat == "fstat" and self.show_stars:
-                        stars = pstars(mod.fstat_pvalue, self.p_values)
+                    if pvalue and self.show_stars:
+                        stars = pstars(getattr(mod, f"{stat}_pvalue"), self.p_values)
                         val = f"{val}{stars}"
                     row.append(val)
                 except AttributeError:
                     row.append("")
             # only add the stat if at least one model has it
-            if not all(r == "" for r in row[1:]):
+            if not all(r == "" for r in row):
                 rows.append(row)
         return rows
 
     @staticmethod
-    def _render(render_func):
+    def _render(render_func: Callable):
+        """
+        Wrapper for the render function to add a p-value note formatted to fit
+        the type of renderer being used.
+
+        Parameters
+        ----------
+        render_func : Callable
+            The rendering function being wrapped
+        """
+
         def wrapper(self, **kwargs):
             if self.show_stars:
                 _p = "p<"
@@ -1034,7 +1097,7 @@ class ModelTable(Table):
 
     @dependent_variable_name.setter
     def dependent_variable_name(self, name: str) -> None:
-        # remove current dependent variable from multicolumns
+        # remove current dependent variable from multicolumns to update later
         if len(self._multicolumns) > 0:
             try:
                 col = (

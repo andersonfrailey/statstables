@@ -45,7 +45,7 @@ class ModelData(ABC):
         """
         pass
 
-    def get_formatted_value(self, stat, sig_digits=3):
+    def get_formatted_value(self, stat: str, sig_digits=3):
         """
         Get a formatted value for the table
         """

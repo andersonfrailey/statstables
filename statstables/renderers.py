@@ -212,8 +212,11 @@ class HTMLRenderer(Renderer):
         row_str = ""
         for row in rows:
             row_str += "    <tr>\n"
-            for r in row:
-                row_str += f'      <td style="text-align:center;">{r}</td>\n'
+            for i, r in enumerate(row):
+                alignment = "center"
+                if i == 0 and self.table.include_index:
+                    alignment = "left"
+                row_str += f'      <td style="text-align:{alignment};">{r}</td>\n'
             row_str += "    </tr>\n"
         for line in self.table.custom_html_lines["after-body"]:
             row_str += line
@@ -229,8 +232,11 @@ class HTMLRenderer(Renderer):
             row_str += "    </tr>\n"
             for row in stats_rows:
                 row_str += "    <tr>\n"
-                for r in row:
-                    row_str += f'      <td style="text-align:center;">{r}</td>\n'
+                for i, r in enumerate(row):
+                    alignment = "center"
+                    if i == 0 and self.table.include_index:
+                        alignment = "left"
+                    row_str += f'      <td style="text-align:{alignment};">{r}</td>\n'
                 row_str += "    </tr>\n"
         return row_str
 
@@ -256,9 +262,11 @@ class HTMLRenderer(Renderer):
 
     def _create_line(self, line):
         out = "    <tr>\n"
-        out += (f"      <th>{line['label']}</th>\n") * self.table.include_index
+        out += (
+            '      <th style="text-align:left;"' + f">{line['label']}</th>\n"
+        ) * self.table.include_index
         for l in line["line"]:
-            out += f"      <th>{l}</th>\n"
+            out += f'      <td style="text-align:center;">{l}</td>\n'
         out += "    </tr>\n"
 
         return out
@@ -323,13 +331,9 @@ class ASCIIRenderer(Renderer):
 
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
-                # if self.table.include_index:
-                #     _size += self.max_body_cell_size *
                 header += f"{c:^{_size}}"
-                # underlines += f"{'-' * len(c):^{_size}}"
                 underlines += f"{'-' * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
-            # if st.STParams["underline_multicolumn"]:
             if underline:
                 header += underlines + f"{st.STParams['ascii_border_char']}\n"
         if self.table.show_columns:
@@ -355,9 +359,13 @@ class ASCIIRenderer(Renderer):
             body += st.STParams["ascii_border_char"]
             for i, r in enumerate(row):
                 _size = self.max_body_cell_size
+                # _align = "^"
                 if i == 0 and self.table.include_index:
-                    _size = self.max_index_name_cell_size
-                body += f"{r:^{_size}}"
+                    _size = self.max_index_name_cell_size - self.padding
+                    # _align = "<"
+                    body += " " * self.padding + f"{r:<{_size}}"
+                else:
+                    body += f"{r:^{_size}}"
             body += f"{st.STParams['ascii_border_char']}\n"
         if self.table.custom_lines["after-body"]:
             body += (
@@ -368,11 +376,15 @@ class ASCIIRenderer(Renderer):
             for line in self.table.custom_lines["after-body"]:
                 for i, l in enumerate(line["line"]):
                     _size = self.max_body_cell_size
+                    # _align = "^"
                     val = l
                     if i == 0 and self.table.include_index:
-                        _size = self.max_index_name_cell_size
+                        _size = self.max_index_name_cell_size - self.padding
+                        # _align = "<"
                         val = line["label"]
-                    body += f"{val:^{_size}}"
+                        body += " " * self.padding + f" {val:<{_size}}"
+                    else:
+                        body += f"{val:^{_size}}"
                 body += "\n"
         if isinstance(self.table, st.tables.ModelTable):
             stats_rows = self.table._create_stats_rows(renderer="ascii")
@@ -386,8 +398,10 @@ class ASCIIRenderer(Renderer):
                 for i, r in enumerate(row):
                     _size = self.max_body_cell_size
                     if i == 0 and self.table.include_index:
-                        _size = self.max_index_name_cell_size
-                    body += f"{r:^{_size}}"
+                        _size = self.max_index_name_cell_size - self.padding
+                        body += " " * self.padding + f"{r:<{_size}}"
+                    else:
+                        body += f"{r:^{_size}}"
                 body += f"{st.STParams['ascii_border_char']}\n"
         return body
 
