@@ -12,5 +12,4 @@ dependencies:
   - pip:
     - statsmodels
     - linearmodels
-    - stargazer
   
