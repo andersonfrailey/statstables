@@ -38,9 +38,19 @@ class LatexRenderer(Renderer):
         ("^", r"\textasciicircum "),
         ("&", r"\&"),
     ]
+    ALIGNMENTS = {
+        "l": "l",
+        "c": "c",
+        "r": "r",
+        "left": "l",
+        "center": "c",
+        "right": "r",
+    }
 
     def __init__(self, table):
         self.table = table
+        self.ialign = self.ALIGNMENTS[self.table.index_alignment]
+        self.calign = self.ALIGNMENTS[self.table.column_alignment]
 
     def render(self, only_tabular=False):
         out = self.generate_header(only_tabular)
@@ -49,7 +59,7 @@ class LatexRenderer(Renderer):
 
         return out
 
-    def generate_header(self, only_tabular=False, column_alignment=None):
+    def generate_header(self, only_tabular=False):
         header = ""
         if not only_tabular:
             header += "\\begin{table}[!htbp]\n  \\centering\n"
@@ -61,9 +71,9 @@ class LatexRenderer(Renderer):
                 if self.table.label is not None:
                     header += "  \\label{" + self.table.label + "}\n"
 
-        content_columns = "c" * self.table.ncolumns
+        content_columns = self.calign * self.table.ncolumns
         if self.table.include_index:
-            content_columns = "l" + content_columns
+            content_columns = self.ialign + content_columns
         header += "\\begin{tabular}{" + content_columns + "}\n"
         header += "  \\toprule\n"
         if st.STParams["double_top_rule"]:
@@ -157,11 +167,20 @@ class LatexRenderer(Renderer):
 
 
 class HTMLRenderer(Renderer):
-    ALIGNMENTS = {"l": "left", "c": "center", "r": "right"}
+    ALIGNMENTS = {
+        "l": "left",
+        "c": "center",
+        "r": "right",
+        "left": "left",
+        "center": "center",
+        "right": "right",
+    }
 
     def __init__(self, table):
         self.table = table
         self.ncolumns = self.table.ncolumns + int(self.table.include_index)
+        self.ialign = self.ALIGNMENTS[self.table.index_alignment]
+        self.calign = self.ALIGNMENTS[self.table.column_alignment]
 
     def render(self):
         out = self.generate_header()
@@ -175,15 +194,15 @@ class HTMLRenderer(Renderer):
         for col, spans, underline in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
-                f"      <th>{self.table.index_name}</th>\n"
+                f'      <th style="text-align:{self.ialign};">{self.table.index_name}</th>\n'
             ) * self.table.include_index
-            th = '<th colspan="{s}" style="text-align:center;">{c}</th>'
+            th = '<th colspan="{s}" style="text-align:{a};">{c}</th>'
             if underline:
-                th = '<th colspan="{s}" style="text-align:center;"><u>{c}</u></th>'
+                th = '<th colspan="{s}" style="text-align:{a};"><u>{c}</u></th>'
             header += "      " + " ".join(
                 [
                     # f'<th colspan="{s}" style="text-align:center;">{c}</th>'
-                    th.format(c=c, s=s)
+                    th.format(c=c, s=s, a=self.calign)
                     for c, s in zip(col, spans)
                 ]
             )
@@ -198,7 +217,7 @@ class HTMLRenderer(Renderer):
                 f"      <th>{self.table.index_name}</th>\n"
             ) * self.table.include_index
             for col in self.table.columns:
-                header += f'      <th style="text-align:center;">{self.table._column_labels.get(col, col)}</th>\n'
+                header += f'      <th style="text-align:{self.calign};">{self.table._column_labels.get(col, col)}</th>\n'
             header += "    </tr>\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
@@ -213,9 +232,9 @@ class HTMLRenderer(Renderer):
         for row in rows:
             row_str += "    <tr>\n"
             for i, r in enumerate(row):
-                alignment = "center"
+                alignment = self.calign
                 if i == 0 and self.table.include_index:
-                    alignment = "left"
+                    alignment = self.ialign
                 row_str += f'      <td style="text-align:{alignment};">{r}</td>\n'
             row_str += "    </tr>\n"
         for line in self.table.custom_html_lines["after-body"]:
@@ -233,9 +252,9 @@ class HTMLRenderer(Renderer):
             for row in stats_rows:
                 row_str += "    <tr>\n"
                 for i, r in enumerate(row):
-                    alignment = "center"
+                    alignment = self.calign
                     if i == 0 and self.table.include_index:
-                        alignment = "left"
+                        alignment = self.ialign
                     row_str += f'      <td style="text-align:{alignment};">{r}</td>\n'
                 row_str += "    </tr>\n"
         return row_str
@@ -263,23 +282,32 @@ class HTMLRenderer(Renderer):
     def _create_line(self, line):
         out = "    <tr>\n"
         out += (
-            '      <th style="text-align:left;"' + f">{line['label']}</th>\n"
+            f'      <th style="text-align:{self.ialign};"' + f">{line['label']}</th>\n"
         ) * self.table.include_index
         for l in line["line"]:
-            out += f'      <td style="text-align:center;">{l}</td>\n'
+            out += f'      <td style="text-align:{self.calign};">{l}</td>\n'
         out += "    </tr>\n"
 
         return out
 
 
 class ASCIIRenderer(Renderer):
-    ALIGNMENTS = {"l": "<", "c": "^", "r": ">"}
+    ALIGNMENTS = {
+        "l": "<",
+        "c": "^",
+        "r": ">",
+        "left": "<",
+        "center": "^",
+        "right": ">",
+    }
 
     def __init__(self, table):
         self.table = table
         # number of spaces to place on either side of cell values
         self.padding = st.STParams["ascii_padding"]
         self.ncolumns = self.table.ncolumns + int(self.table.include_index)
+        self.ialign = self.ALIGNMENTS[self.table.index_alignment]
+        self.calign = self.ALIGNMENTS[self.table.column_alignment]
         self.reset_size_parameters()
 
     def reset_size_parameters(self):
@@ -359,13 +387,13 @@ class ASCIIRenderer(Renderer):
             body += st.STParams["ascii_border_char"]
             for i, r in enumerate(row):
                 _size = self.max_body_cell_size
-                # _align = "^"
+                _align = self.calign
                 if i == 0 and self.table.include_index:
                     _size = self.max_index_name_cell_size - self.padding
-                    # _align = "<"
-                    body += " " * self.padding + f"{r:<{_size}}"
+                    _align = self.ialign
+                    body += " " * self.padding + f"{r:{_align}{_size}}"
                 else:
-                    body += f"{r:^{_size}}"
+                    body += f"{r:{_align}{_size}}"
             body += f"{st.STParams['ascii_border_char']}\n"
 
         if self.table.custom_lines["after-body"]:
@@ -385,9 +413,9 @@ class ASCIIRenderer(Renderer):
                     _size = self.max_body_cell_size
                     if i == 0 and self.table.include_index:
                         _size = self.max_index_name_cell_size - self.padding
-                        body += " " * self.padding + f"{r:<{_size}}"
+                        body += " " * self.padding + f"{r:{self.ialign}{_size}}"
                     else:
-                        body += f"{r:^{_size}}"
+                        body += f"{r:{self.calign}{_size}}"
                 body += f"{st.STParams['ascii_border_char']}\n"
         return body
 
@@ -424,10 +452,10 @@ class ASCIIRenderer(Renderer):
         if self.table.include_index:
             _line += (
                 " " * self.padding
-                + f"{line['label']:<{self.max_index_name_cell_size - self.padding}}"
+                + f"{line['label']:{self.ialign}{self.max_index_name_cell_size - self.padding}}"
             )
         for l in line["line"]:
-            _line += f"{l:^{self.max_body_cell_size}}"
+            _line += f"{l:{self.calign}{self.max_body_cell_size}}"
         _line += st.STParams["ascii_border_char"] + "\n"
         return _line
 

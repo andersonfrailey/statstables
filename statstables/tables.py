@@ -15,6 +15,8 @@ class Table(ABC):
     Abstract class for defining common characteristics/methods of all tables
     """
 
+    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
+
     def __init__(self):
         self.reset_params()
 
@@ -39,6 +41,8 @@ class Table(ABC):
         self.include_index = False
         self.index_name = ""
         self.show_columns = True
+        self.index_alignment = st.STParams["index_alignment"]
+        self.column_alignment = st.STParams["column_alignment"]
 
     @property
     def ncolumns(self) -> int:
@@ -147,6 +151,34 @@ class Table(ABC):
     def show_columns(self, show: bool) -> None:
         assert isinstance(show, bool), "show_columns must be True or False"
         self._show_columns = show
+
+    @property
+    def index_alignment(self) -> str:
+        """
+        Alignment of the index column in the table
+        """
+        return self._index_alignment
+
+    @index_alignment.setter
+    def index_alignment(self, alignment: str) -> None:
+        assert (
+            alignment in self.VALID_ALIGNMENTS
+        ), f"index_alignment must be in {self.VALID_ALIGNMENTS}"
+        self._index_alignment = alignment
+
+    @property
+    def column_alignment(self) -> str:
+        """
+        Alignment of the column labels in the table
+        """
+        return self._column_alignment
+
+    @column_alignment.setter
+    def column_alignment(self, alignment: str) -> None:
+        assert (
+            alignment in self.VALID_ALIGNMENTS
+        ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
+        self._column_alignment = alignment
 
     def rename_columns(self, columndict: dict) -> None:
         """
@@ -498,6 +530,7 @@ class Table(ABC):
         if not outfile:
             return tex_str
         Path(outfile).write_text(tex_str)
+        return None
 
     def render_html(self, outfile: Union[str, Path, None] = None) -> Union[str, None]:
         """
@@ -524,6 +557,7 @@ class Table(ABC):
         if not outfile:
             return html_str
         Path(outfile).write_text(html_str)
+        return None
 
     def render_ascii(self) -> str:
         return ASCIIRenderer(self).render()
