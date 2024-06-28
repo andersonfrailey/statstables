@@ -1,6 +1,15 @@
-from statstables import tables, renderers, utils
+from statstables import tables, renderers, utils, modeltables
+from statsmodels.base.wrapper import ResultsWrapper
+from statsmodels.regression.linear_model import RegressionResultsWrapper
+from statsmodels.discrete.discrete_model import BinaryResultsWrapper
+from linearmodels.iv.results import IVResults, OLSResults
+from linearmodels.panel.results import (
+    PanelEffectsResults,
+    PanelResults,
+    RandomEffectsResults,
+)
 
-__all__ = ["STParams"]
+__all__ = ["STParams", "SupportedModels"]
 
 
 class Params(dict):
@@ -20,6 +29,20 @@ STParams["ascii_header_char"] = "="
 STParams["ascii_footer_char"] = "="
 STParams["ascii_border_char"] = ""
 STParams["ascii_mid_rule_char"] = "-"
-STParams["underline_multicolumn"] = False
 STParams["double_top_rule"] = True
 STParams["double_bottom_rule"] = False
+STParams["max_html_notes_length"] = 80
+STParams["max_ascii_notes_length"] = 80
+STParams["index_alignment"] = "l"
+STParams["column_alignment"] = "c"
+
+SupportedModels = {
+    RegressionResultsWrapper: modeltables.StatsModelsData,
+    ResultsWrapper: modeltables.StatsModelsData,
+    BinaryResultsWrapper: modeltables.StatsModelsData,
+    IVResults: modeltables.LinearModelsData,
+    OLSResults: modeltables.LinearModelsData,
+    PanelEffectsResults: modeltables.LinearModelsData,
+    PanelResults: modeltables.LinearModelsData,
+    RandomEffectsResults: modeltables.LinearModelsData,
+}

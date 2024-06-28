@@ -1,4 +1,5 @@
 import pytest
+import statsmodels.formula.api as smf
 from statstables import tables
 
 
@@ -39,3 +40,12 @@ def test_mean_differences_table(data):
     table.label = "table:differencesinmeans"
     table.caption_location = "top"
     table.custom_formatters({("A", "X"): lambda x: f"{x:.2f}"})
+
+
+def test_model_table(data):
+    mod1 = smf.ols("A ~ B + C -1", data=data).fit()
+    mod2 = smf.ols("A ~ B + C", data=data).fit()
+    mod_table = tables.ModelTable(models=[mod1, mod2])
+    mod_table.show_model_nums = True
+    mod_table.parameter_order(["Intercept", "B", "C"])
+    print(mod_table)
