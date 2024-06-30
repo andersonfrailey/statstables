@@ -27,7 +27,7 @@ ModelTypes: TypeAlias = (
 )
 
 # model stats that should always be formatted as integers
-INT_VARS = ["observations"]
+INT_VARS = ["observations", "ngroups"]
 
 
 @dataclass
@@ -157,3 +157,7 @@ class LinearModelsData(ModelData):
         self.data["dependent_variable"] = self.model.summary.tables[0].data[0][1]
         self.data["fstat"] = self.model.f_statistic.stat
         self.data["fstat_pvalue"] = self.model.f_statistic.pval
+        if isinstance(
+            self.model, (PanelEffectsResults, RandomEffectsResults, PanelResults)
+        ):
+            self.data["ngroups"] = self.model.entity_info.total

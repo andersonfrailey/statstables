@@ -887,12 +887,12 @@ class ModelTable(Table):
     # configuration  is (name of the attribute, label, whether it has a p-value)
     model_stats = [
         ("observations", "Observations", False),
-        ("ngroups", "N. of groups", False),
-        ("r2", {"latex": "R^2", "html": "R<sup>2</sup>", "ascii": "R2"}, False),
+        ("ngroups", "N. Groups", False),
+        ("r2", {"latex": "$R^2$", "html": "R<sup>2</sup>", "ascii": "R2"}, False),
         (
             "adjusted_r2",
             {
-                "latex": "Adjusted R^2",
+                "latex": "Adjusted $R^2$",
                 "html": "Adjusted R<sup>2</sup>",
                 "ascii": "Adjusted R2",
             },
@@ -901,7 +901,7 @@ class ModelTable(Table):
         (
             "pseudo_r2",
             {
-                "latex": "Pseudo R^2",
+                "latex": "Pseudo $R^2$",
                 "html": "Pseudo R<sup>2</sup>",
                 "ascii": "Pseudo R2",
             },
@@ -1072,7 +1072,7 @@ class ModelTable(Table):
                 except AttributeError:
                     row.append("")
             # only add the stat if at least one model has it
-            if not all(r == "" for r in row):
+            if not all(r == "" for r in row[1:]):
                 rows.append(row)
         return rows
 
@@ -1137,6 +1137,7 @@ class ModelTable(Table):
                 col = (
                     ["", f"Dependent Variable: {self.dependent_variable_name}"],
                     [1, self.ncolumns - 1],
+                    True,
                 )
                 self.remove_multicolumn(col)
             except ValueError:
@@ -1164,6 +1165,15 @@ class ModelTable(Table):
     def show_adjusted_r2(self, show: bool) -> None:
         assert isinstance(show, bool)
         self._show_adjusted_r2 = show
+
+    @property
+    def show_pseudo_r2(self) -> bool:
+        return self._show_pseudo_r2
+
+    @show_pseudo_r2.setter
+    def show_pseudo_r2(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_pseudo_r2 = show
 
     @property
     def show_dof(self) -> bool:
@@ -1218,6 +1228,15 @@ class ModelTable(Table):
     def show_observations(self, show: bool) -> None:
         assert isinstance(show, bool)
         self._show_observations = show
+
+    @property
+    def show_ngroups(self) -> bool:
+        return self._show_ngroups
+
+    @show_ngroups.setter
+    def show_ngroups(self, show: bool) -> None:
+        assert isinstance(show, bool)
+        self._show_ngroups = show
 
     @property
     def show_model_numbers(self) -> bool:
