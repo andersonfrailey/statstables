@@ -123,7 +123,7 @@ class LatexRenderer(Renderer):
             row_str += "  \\midrule\n"
             stats_rows = self.table._create_stats_rows(renderer="latex")
             for row in stats_rows:
-                row_str += "  " + " & ".join([self._escape(r) for r in row]) + " \\\\\n"
+                row_str += "  " + " & ".join(row) + " \\\\\n"
         return row_str
 
     def generate_footer(self, only_tabular=False):

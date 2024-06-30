@@ -1,0 +1,21 @@
+\begin{tabular}{cccc}
+  \toprule
+  \toprule
+   & \multicolumn{1}{c}{OLS} & \multicolumn{2}{c}{2SLS} \\
+   & \multicolumn{1}{c}{} & \multicolumn{1}{c}{First Stage} & \multicolumn{1}{c}{Second Stage} \\
+   & (1) & (2) & (3)\\
+  \midrule
+  Intercept & -0.185 & 10.237*** & 0.441 \\
+   & (0.185) & (0.275) & (0.445) \\
+  Father Education &  & 0.269*** &  \\
+   &  & (0.029) &  \\
+  Education & 0.109*** &  & 0.059* \\
+   & (0.014) &  & (0.035) \\
+  \midrule
+  Observations & 428 & 428 & 428 \\
+  $R^2$ & 0.118 & 0.173 & 0.093 \\
+  F Statistic & 57.196*** & 89.258*** & 2.849* \\
+  Model & OLS & OLS & IV-2SLS \\
+  \bottomrule
+  \multicolumn{4}{r}{{\small \textit{*p$<$0.1, **p$<$0.05, ***p$<$0.01}}}\\
+\end{tabular}
