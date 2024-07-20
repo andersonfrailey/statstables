@@ -62,7 +62,7 @@ class LatexRenderer(Renderer):
     def generate_header(self, only_tabular=False):
         header = ""
         if not only_tabular:
-            header += "\\begin{table}[!htbp]\n  \\centering\n"
+            header += "\\begin{table}[!ht]\n  \\centering\n"
 
             if self.table.caption_location == "top":
                 if self.table.caption is not None:
@@ -80,14 +80,25 @@ class LatexRenderer(Renderer):
             header += "  \\toprule\n"
         for col, spans, underline in self.table._multicolumns:
             header += ("  " + self.table.index_name + " & ") * self.table.include_index
-            # TODO: Implement underline
-            header += " & ".join(
-                [
-                    f"\\multicolumn{{{s}}}{{c}}{{{self._escape(c)}}}"
-                    for c, s in zip(col, spans)
-                ]
-            )
-            header += " \\\\\n"
+            underline_line = ""
+            underline_start = self.table.include_index + 1
+            mcs = []
+            for c, s in zip(col, spans):
+                mcs.append(f"\\multicolumn{{{s}}}{{c}}{{{c}}}")
+                if underline:
+                    if c == "":
+                        underline_start += s
+                        continue
+                    underline_line += (
+                        "\\cmidrule(lr){"
+                        + f"{underline_start}-"
+                        + f"{underline_start + s -1}"
+                        + "}"
+                    )
+                    underline_start += s
+            header += " & ".join(mcs) + " \\\\\n"
+            if underline:
+                header += "  " + underline_line + " \\\\\n"
         if self.table.custom_tex_lines["after-multicolumns"]:
             for line in self.table.custom_tex_lines["after-multicolumns"]:
                 header += "  " + line + "\n"
@@ -200,11 +211,7 @@ class HTMLRenderer(Renderer):
             if underline:
                 th = '<th colspan="{s}" style="text-align:{a};"><u>{c}</u></th>'
             header += "      " + " ".join(
-                [
-                    # f'<th colspan="{s}" style="text-align:center;">{c}</th>'
-                    th.format(c=c, s=s, a=self.calign)
-                    for c, s in zip(col, spans)
-                ]
+                [th.format(c=c, s=s, a=self.calign) for c, s in zip(col, spans)]
             )
             header += "\n"
             header += "    </tr>\n"
@@ -360,7 +367,8 @@ class ASCIIRenderer(Renderer):
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
                 header += f"{c:^{_size}}"
-                underlines += f"{'-' * (_size - 2):^{_size}}"
+                uchar = "-" if c != "" else " "
+                underlines += f"{uchar * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
             if underline:
                 header += underlines + f"{st.STParams['ascii_border_char']}\n"
