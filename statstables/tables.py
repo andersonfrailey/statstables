@@ -44,142 +44,6 @@ class Table(ABC):
         self.index_alignment = st.STParams["index_alignment"]
         self.column_alignment = st.STParams["column_alignment"]
 
-    @property
-    def ncolumns(self) -> int:
-        return self._ncolumns
-
-    @ncolumns.setter
-    def ncolumns(self, ncolumns: int) -> None:
-        self._ncolumns = ncolumns
-
-    @property
-    def caption_location(self) -> str:
-        """
-        Location of the caption in the table. Can be either 'top' or 'bottom'.
-        """
-        return self._caption_location
-
-    @caption_location.setter
-    def caption_location(self, location: str) -> None:
-        assert location in [
-            "top",
-            "bottom",
-        ], "caption_location must be 'top' or 'bottom'"
-        self._caption_location = location
-
-    @property
-    def caption(self) -> str | None:
-        """
-        Caption for the table. This will be placed above or below the table,
-        depending on the caption_location parameter.
-        """
-        return self._caption
-
-    @caption.setter
-    def caption(self, caption: str | None = None) -> None:
-        assert isinstance(caption, (str, type(None))), "Caption must be a string"
-        self._caption = caption
-
-    @property
-    def label(self) -> str | None:
-        """
-        Label for the table. This will be used to reference the table in LaTeX.
-        """
-        return self._label
-
-    @label.setter
-    def label(self, label: str | None = None) -> None:
-        assert isinstance(label, (str, type(None))), "Label must be a string"
-        self._label = label
-
-    @property
-    def sig_digits(self) -> int:
-        """
-        Number of significant digits to include in the table
-        """
-        return self._sig_digits
-
-    @sig_digits.setter
-    def sig_digits(self, digits: int) -> None:
-        assert isinstance(digits, int), "sig_digits must be an integer"
-        self._sig_digits = digits
-
-    @property
-    def thousands_sep(self) -> str:
-        """
-        Character to use as the thousands separator in the table
-        """
-        return self._thousands_sep
-
-    @thousands_sep.setter
-    def thousands_sep(self, sep: str) -> None:
-        assert isinstance(sep, str), "thousands_sep must be a string"
-        self._thousands_sep = sep
-
-    @property
-    def include_index(self) -> bool:
-        """
-        Whether or not to include the index in the table
-        """
-        return self._include_index
-
-    @include_index.setter
-    def include_index(self, include: bool) -> None:
-        assert isinstance(include, bool), "include_index must be True or False"
-        self._include_index = include
-
-    @property
-    def index_name(self) -> str:
-        """
-        Name of the index column in the table
-        """
-        return self._index_name
-
-    @index_name.setter
-    def index_name(self, name: str) -> None:
-        assert isinstance(name, str), "index_name must be a string"
-        self._index_name = name
-
-    @property
-    def show_columns(self) -> bool:
-        """
-        Whether or not to show the column labels in the table
-        """
-        return self._show_columns
-
-    @show_columns.setter
-    def show_columns(self, show: bool) -> None:
-        assert isinstance(show, bool), "show_columns must be True or False"
-        self._show_columns = show
-
-    @property
-    def index_alignment(self) -> str:
-        """
-        Alignment of the index column in the table
-        """
-        return self._index_alignment
-
-    @index_alignment.setter
-    def index_alignment(self, alignment: str) -> None:
-        assert (
-            alignment in self.VALID_ALIGNMENTS
-        ), f"index_alignment must be in {self.VALID_ALIGNMENTS}"
-        self._index_alignment = alignment
-
-    @property
-    def column_alignment(self) -> str:
-        """
-        Alignment of the column labels in the table
-        """
-        return self._column_alignment
-
-    @column_alignment.setter
-    def column_alignment(self, alignment: str) -> None:
-        assert (
-            alignment in self.VALID_ALIGNMENTS
-        ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
-        self._column_alignment = alignment
-
     def rename_columns(self, columndict: dict) -> None:
         """
         Rename the columns in the table. The keys of the columndict should be the
@@ -603,6 +467,144 @@ class Table(ABC):
         if not isinstance(value, dtype):
             raise TypeError(f"{value} must be a {dtype}")
 
+    ##### Properties #####
+
+    @property
+    def ncolumns(self) -> int:
+        return self._ncolumns
+
+    @ncolumns.setter
+    def ncolumns(self, ncolumns: int) -> None:
+        self._ncolumns = ncolumns
+
+    @property
+    def caption_location(self) -> str:
+        """
+        Location of the caption in the table. Can be either 'top' or 'bottom'.
+        """
+        return self._caption_location
+
+    @caption_location.setter
+    def caption_location(self, location: str) -> None:
+        assert location in [
+            "top",
+            "bottom",
+        ], "caption_location must be 'top' or 'bottom'"
+        self._caption_location = location
+
+    @property
+    def caption(self) -> str | None:
+        """
+        Caption for the table. This will be placed above or below the table,
+        depending on the caption_location parameter.
+        """
+        return self._caption
+
+    @caption.setter
+    def caption(self, caption: str | None = None) -> None:
+        assert isinstance(caption, (str, type(None))), "Caption must be a string"
+        self._caption = caption
+
+    @property
+    def label(self) -> str | None:
+        """
+        Label for the table. This will be used to reference the table in LaTeX.
+        """
+        return self._label
+
+    @label.setter
+    def label(self, label: str | None = None) -> None:
+        assert isinstance(label, (str, type(None))), "Label must be a string"
+        self._label = label
+
+    @property
+    def sig_digits(self) -> int:
+        """
+        Number of significant digits to include in the table
+        """
+        return self._sig_digits
+
+    @sig_digits.setter
+    def sig_digits(self, digits: int) -> None:
+        assert isinstance(digits, int), "sig_digits must be an integer"
+        self._sig_digits = digits
+
+    @property
+    def thousands_sep(self) -> str:
+        """
+        Character to use as the thousands separator in the table
+        """
+        return self._thousands_sep
+
+    @thousands_sep.setter
+    def thousands_sep(self, sep: str) -> None:
+        assert isinstance(sep, str), "thousands_sep must be a string"
+        self._thousands_sep = sep
+
+    @property
+    def include_index(self) -> bool:
+        """
+        Whether or not to include the index in the table
+        """
+        return self._include_index
+
+    @include_index.setter
+    def include_index(self, include: bool) -> None:
+        assert isinstance(include, bool), "include_index must be True or False"
+        self._include_index = include
+
+    @property
+    def index_name(self) -> str:
+        """
+        Name of the index column in the table
+        """
+        return self._index_name
+
+    @index_name.setter
+    def index_name(self, name: str) -> None:
+        assert isinstance(name, str), "index_name must be a string"
+        self._index_name = name
+
+    @property
+    def show_columns(self) -> bool:
+        """
+        Whether or not to show the column labels in the table
+        """
+        return self._show_columns
+
+    @show_columns.setter
+    def show_columns(self, show: bool) -> None:
+        assert isinstance(show, bool), "show_columns must be True or False"
+        self._show_columns = show
+
+    @property
+    def index_alignment(self) -> str:
+        """
+        Alignment of the index column in the table
+        """
+        return self._index_alignment
+
+    @index_alignment.setter
+    def index_alignment(self, alignment: str) -> None:
+        assert (
+            alignment in self.VALID_ALIGNMENTS
+        ), f"index_alignment must be in {self.VALID_ALIGNMENTS}"
+        self._index_alignment = alignment
+
+    @property
+    def column_alignment(self) -> str:
+        """
+        Alignment of the column labels in the table
+        """
+        return self._column_alignment
+
+    @column_alignment.setter
+    def column_alignment(self, alignment: str) -> None:
+        assert (
+            alignment in self.VALID_ALIGNMENTS
+        ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
+        self._column_alignment = alignment
+
 
 class GenericTable(Table):
     """
@@ -726,33 +728,6 @@ class MeanDifferenceTable(Table):
         self.include_index = True
         self.show_stars = True
 
-    @property
-    def show_n(self) -> bool:
-        return self._show_n
-
-    @show_n.setter
-    def show_n(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_n = value
-
-    @property
-    def show_standard_errors(self) -> bool:
-        return self._show_standard_errors
-
-    @show_standard_errors.setter
-    def show_standard_errors(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_standard_errors = value
-
-    @property
-    def show_stars(self) -> bool:
-        return self._show_stars
-
-    @show_stars.setter
-    def show_stars(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_stars = value
-
     @staticmethod
     def _render(render_func):
         def wrapper(self, **kwargs):
@@ -866,6 +841,35 @@ class MeanDifferenceTable(Table):
             if self.show_standard_errors:
                 rows.append(sem_row)
         return rows
+
+    ##### Properties #####
+
+    @property
+    def show_n(self) -> bool:
+        return self._show_n
+
+    @show_n.setter
+    def show_n(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_n = value
+
+    @property
+    def show_standard_errors(self) -> bool:
+        return self._show_standard_errors
+
+    @show_standard_errors.setter
+    def show_standard_errors(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_standard_errors = value
+
+    @property
+    def show_stars(self) -> bool:
+        return self._show_stars
+
+    @show_stars.setter
+    def show_stars(self, value: bool) -> None:
+        self._validate_input_type(value, bool)
+        self._show_stars = value
 
 
 class SummaryTable(GenericTable):
@@ -1151,6 +1155,8 @@ class ModelTable(Table):
             self.add_multicolumns(
                 ["", f"Dependent Variable: {name}"], [1, self.ncolumns - 1], position=0
             )
+
+    ##### Properties #####
 
     @property
     def show_r2(self) -> bool:
