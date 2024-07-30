@@ -316,19 +316,6 @@ class ASCIIRenderer(Renderer):
         self.max_index_name_cell_size = 0
         self._len = 0
 
-    @property
-    def padding(self) -> int:
-        return self._padding
-
-    @padding.setter
-    def padding(self, value):
-        assert isinstance(value, int), "Padding must be an integer"
-        if value < 0:
-            raise ValueError("Padding must be a non-negative integer")
-        if value > 20:
-            raise ValueError("Woah there buddy. That's a lot of space.")
-        self._padding = value
-
     def render(self) -> str:
         self._get_table_widths()
         out = self.generate_header()
@@ -507,3 +494,17 @@ class ASCIIRenderer(Renderer):
         self._len = self.max_body_cell_size * self.table.ncolumns
         self._len += self.max_index_name_cell_size
         self._border_len = len(st.STParams["ascii_border_char"])
+
+    ##### Properties #####
+    @property
+    def padding(self) -> int:
+        return self._padding
+
+    @padding.setter
+    def padding(self, value):
+        assert isinstance(value, int), "Padding must be an integer"
+        if value < 0:
+            raise ValueError("Padding must be a non-negative integer")
+        if value > 20:
+            raise ValueError("Woah there buddy. That's a lot of space.")
+        self._padding = value
