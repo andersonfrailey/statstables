@@ -24,7 +24,7 @@ class Table(ABC):
         """
         Resets all parameters to their default values
         """
-        self.caption_location = "bottom"
+        self.caption_location = "top"
         self.caption = None
         self.label = None
         self.sig_digits = 3
@@ -796,6 +796,10 @@ class MeanDifferenceTable(Table):
     @_render
     def render_html(self, outfile=None) -> Union[str, None]:
         return super().render_html(outfile)
+
+    @_render
+    def render_ascii(self) -> str:
+        return super().render_ascii()
 
     def _get_diffs(self):
         # TODO: allow for standard errors caluclated under dependent samples
