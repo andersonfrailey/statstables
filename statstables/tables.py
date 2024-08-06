@@ -367,7 +367,7 @@ class Table(ABC):
             self.custom_html_lines[location].pop(index)
 
     def render_latex(
-        self, outfile: Union[str, Path, None] = None, only_tabular=False
+        self, outfile: Union[str, Path, None] = None, only_tabular=True
     ) -> Union[str, None]:
         """
         Render the table in LaTeX. Note that you will need to include the booktabs
@@ -398,10 +398,8 @@ class Table(ABC):
 
     def render_html(self, outfile: Union[str, Path, None] = None) -> Union[str, None]:
         """
-        Render the table in HTML. Note that you will need to include the booktabs
-        package in your LaTeX document. If no outfile is provided, the LaTeX
-        string will be returned, otherwise the text will be written to the specified
-        file.
+        Render the table in HTML. If no outfile is provided, the HTML string will
+        be returned, otherwise the text will be written to the specified file.
 
         This is also used in the _repr_html_ method to render the tables in
         Jupyter notebooks.
@@ -440,7 +438,6 @@ class Table(ABC):
             return f"{value:{self.thousands_sep}.{self.sig_digits}f}"
         elif isinstance(value, str):
             return value
-        return value
 
     def _format_value(self, _index: str, col: str, value: Union[int, float, str]):
         if (_index, col) in self._formatters.keys():
@@ -708,17 +705,17 @@ class MeanDifferenceTable(Table):
         self.add_multicolumns(
             ["Means", "", diff_word], [self.ngroups, 1, self.ndiffs]
         )  # may need to move this later if we make including the total mean optional
-        self.add_latex_line(
-            (
-                "\\cline{2-" + str(self.ngroups + 1) + "}"
-                "\\cline{"
-                + str(self.ngroups + 3)
-                + "-"
-                + str(self.ncolumns + 1)
-                + "}\\\\\n"
-            ),
-            location="after-multicolumns",
-        )  # this too
+        # self.add_latex_line(
+        #     (
+        #         "\\cline{2-" + str(self.ngroups + 1) + "}"
+        #         "\\cline{"
+        #         + str(self.ngroups + 3)
+        #         + "-"
+        #         + str(self.ncolumns + 1)
+        #         + "}\\\\\n"
+        #     ),
+        #     location="after-multicolumns",
+        # )  # this too
 
     def reset_params(self):
         super().reset_params()
@@ -1008,8 +1005,14 @@ class ModelTable(Table):
         order : list
             List of the parameters in the order you want them to appear in the table.
         """
+        missing = ""
         for p in order:
-            assert p in self.all_param_labels
+            if p not in self.all_param_labels:
+                missing += f"{p}\n"
+        if missing:
+            raise ValueError(
+                f"The following parameters do not appear in any models:\n\t{missing}"
+            )
         self.param_labels = order
 
     def _create_rows(self):
