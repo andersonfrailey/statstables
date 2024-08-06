@@ -191,6 +191,8 @@ class HTMLRenderer(Renderer):
     def generate_header(self):
         header = "<table>\n"
         header += "  <thead>\n"
+        if self.table.caption and self.table.caption_location == "top":
+            header += f'    <tr><th  colspan="{self.ncolumns}" style="text-align:center">{self.table.caption}</th></tr>\n'
         for col, spans, underline in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
@@ -276,6 +278,8 @@ class HTMLRenderer(Renderer):
                         f'style="text-align:{self.ALIGNMENTS[alignment]};'
                         f'"><i>{_note}</i></td></tr>\n'
                     )
+        if self.table.caption and self.table.caption_location == "bottom":
+            footer += f'    <tr><th colspan="{self.ncolumns}" style="text-align:center">{self.table.caption}</th></tr>\n'
         footer += "  </tbody>\n"
         return footer
 
@@ -324,12 +328,15 @@ class ASCIIRenderer(Renderer):
         return out
 
     def generate_header(self) -> str:
-        header = (
+        header = ""
+        if self.table.caption and self.table.caption_location == "top":
+            header += f"\n{self.table.caption:^{self._len + (2 * self._border_len)}}\n"
+        header += (
             st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
             + "\n"
         )
         if st.STParams["double_top_rule"]:
-            header = (
+            header += (
                 st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
                 + "\n"
             )
@@ -424,7 +431,7 @@ class ASCIIRenderer(Renderer):
                     self._len + (2 * self._border_len)
                 )
         if self.table.notes:
-            footer += "\n"
+            # footer += "\n"
             for note, alignment, _ in self.table.notes:
                 notes = textwrap.wrap(
                     note, width=min(self._len, st.STParams["max_ascii_notes_length"])
@@ -432,6 +439,8 @@ class ASCIIRenderer(Renderer):
                 _alignment = self.ALIGNMENTS[alignment]
                 for _note in notes:
                     footer += f"\n{_note:{_alignment}{self._len}}"
+        if self.table.caption and self.table.caption_location == "bottom":
+            footer += f"\n{self.table.caption:^{self._len + (2 * self._border_len)}}\n"
         return footer
 
     def _create_line(self, line) -> str:
