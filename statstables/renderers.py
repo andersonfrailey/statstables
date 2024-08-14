@@ -62,7 +62,7 @@ class LatexRenderer(Renderer):
     def generate_header(self, only_tabular=False):
         header = ""
         if not only_tabular:
-            header += "\\begin{table}[!htbp]\n  \\centering\n"
+            header += "\\begin{table}[!ht]\n  \\centering\n"
 
             if self.table.caption_location == "top":
                 if self.table.caption is not None:
@@ -79,15 +79,28 @@ class LatexRenderer(Renderer):
         if st.STParams["double_top_rule"]:
             header += "  \\toprule\n"
         for col, spans, underline in self.table._multicolumns:
-            header += ("  " + self.table.index_name + " & ") * self.table.include_index
-            # TODO: Implement underline
-            header += " & ".join(
-                [
-                    f"\\multicolumn{{{s}}}{{c}}{{{self._escape(c)}}}"
-                    for c, s in zip(col, spans)
-                ]
-            )
-            header += " \\\\\n"
+            # TODO: convert the line below to allow for labeling each multicolumn
+            # header += ("  " + self.table.index_name + " & ") * self.table.include_index
+            header += "  & " * self.table.include_index
+            underline_line = ""
+            underline_start = self.table.include_index + 1
+            mcs = []
+            for c, s in zip(col, spans):
+                mcs.append(f"\\multicolumn{{{s}}}{{c}}{{{c}}}")
+                if underline:
+                    if c == "":
+                        underline_start += s
+                        continue
+                    underline_line += (
+                        "\\cmidrule(lr){"
+                        + f"{underline_start}-"
+                        + f"{underline_start + s -1}"
+                        + "}"
+                    )
+                    underline_start += s
+            header += " & ".join(mcs) + " \\\\\n"
+            if underline:
+                header += "  " + underline_line + " \\\\\n"
         if self.table.custom_tex_lines["after-multicolumns"]:
             for line in self.table.custom_tex_lines["after-multicolumns"]:
                 header += "  " + line + "\n"
@@ -196,7 +209,7 @@ class HTMLRenderer(Renderer):
         for col, spans, underline in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
-                f'      <th style="text-align:{self.ialign};">{self.table.index_name}</th>\n'
+                f'      <th style="text-align:{self.ialign};"></th>\n'
             ) * self.table.include_index
             th = '<th colspan="{s}" style="text-align:{a};">{c}</th>'
             if underline:

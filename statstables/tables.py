@@ -708,17 +708,6 @@ class MeanDifferenceTable(Table):
         self.add_multicolumns(
             ["Means", "", diff_word], [self.ngroups, 1, self.ndiffs]
         )  # may need to move this later if we make including the total mean optional
-        self.add_latex_line(
-            (
-                "\\cline{2-" + str(self.ngroups + 1) + "}"
-                "\\cline{"
-                + str(self.ngroups + 3)
-                + "-"
-                + str(self.ncolumns + 1)
-                + "}\\\\\n"
-            ),
-            location="after-multicolumns",
-        )  # this too
 
     def reset_params(self):
         super().reset_params()
