@@ -51,10 +51,10 @@ class ModelData(ABC):
         """
         value = getattr(self, stat)
         if stat in INT_VARS:
-            return f"{int(value)}"
+            return f"{int(value):,}"
         if isinstance(value, str):
             return f"{value}"
-        return f"{value:.{sig_digits}f}"
+        return f"{value:,.{sig_digits}f}"
 
     def __getitem__(self, name: str) -> Any:
         return self.data[name]

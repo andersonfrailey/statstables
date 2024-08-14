@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def format_values(vals, pvals, plevels, sigdigits):
     formatted_vals = []
     for val, pval in zip(vals, pvals):
@@ -13,6 +16,8 @@ def format_values(vals, pvals, plevels, sigdigits):
 
 
 def pstars(value, plevels):
+    if np.isnan(value):
+        return ""
     levels = sorted(plevels, reverse=True)
     stars = ""
     for pval in levels:

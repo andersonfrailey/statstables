@@ -1,13 +1,12 @@
-\begin{table}[!htbp]
+\begin{table}[!ht]
   \centering
   \caption{Differences in means}
   \label{table:differencesinmeans}
 \begin{tabular}{lccccccc}
   \toprule
   \toprule
-   & \multicolumn{3}{c}{Means} & \multicolumn{1}{c}{} & \multicolumn{3}{c}{Differences} \\
-  \cline{2-4}\cline{6-8}\\
-
+  & \multicolumn{3}{c}{Means} & \multicolumn{1}{c}{} & \multicolumn{3}{c}{Differences} \\
+  \cmidrule(lr){2-4}\cmidrule(lr){6-8} \\
    & X & Y & Z & Overall Mean & X - Y & X - Z & Y - Z\\
    & N=100 & N=100 & N=100 & N=300 &  &  & \\
   \midrule
@@ -21,12 +20,15 @@
   \multicolumn{8}{r}{{\small \textit{Significance levels: * p$<$ 0.1, ** p$<$ 0.05, *** p$<$ 0.01}}}\\
 \end{tabular}
 \end{table}
-\begin{table}[!htbp]
+\begin{table}[!ht]
   \centering
+  \caption{Summary Table}
+  \label{table:summarytable}
 \begin{tabular}{lccc}
   \toprule
   \toprule
-   & \multicolumn{1}{c}{First} & \multicolumn{2}{c}{Second} \\
+  & \multicolumn{1}{c}{First} & \multicolumn{2}{c}{Second} \\
+  \cmidrule(lr){2-2}\cmidrule(lr){3-4} \\
    & a & B & C\\
   Example & Yes & No & Yes\\
   \midrule
@@ -46,6 +48,4 @@
   \multicolumn{4}{c}{{\small \textit{But you can move it to the middle!}}}\\
   \multicolumn{4}{l}{{\small \textit{Or over here!}}}\\
 \end{tabular}
-  \caption{Summary Table}
-  \label{table:summarytable}
 \end{table}
