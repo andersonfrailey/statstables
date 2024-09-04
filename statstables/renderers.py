@@ -37,6 +37,8 @@ class LatexRenderer(Renderer):
         ("~", r"\textasciitilde "),
         ("^", r"\textasciicircum "),
         ("&", r"\&"),
+        (">", "$>$"),
+        ("<", "$<$"),
     ]
     ALIGNMENTS = {
         "l": "l",
@@ -353,12 +355,10 @@ class ASCIIRenderer(Renderer):
                 st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
                 + "\n"
             )
-        # underlines = st.STParams["ascii_border_char"]
         for col, span, underline in self.table._multicolumns:
             header += st.STParams["ascii_border_char"] + (
                 " " * self.max_index_name_cell_size * self.table.include_index
             )
-            # underlines += " " * self.max_index_name_cell_size * self.table.include_index
             underlines = (
                 st.STParams["ascii_border_char"]
                 + " " * self.max_index_name_cell_size * self.table.include_index
@@ -367,7 +367,8 @@ class ASCIIRenderer(Renderer):
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
                 header += f"{c:^{_size}}"
-                underlines += f"{'-' * (_size - 2):^{_size}}"
+                uchar = "-" if c != "" else " "
+                underlines += f"{uchar * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
             if underline:
                 header += underlines + f"{st.STParams['ascii_border_char']}\n"
@@ -379,11 +380,15 @@ class ASCIIRenderer(Renderer):
             for col in self.table.columns:
                 header += f"{self.table._column_labels.get(col, col):^{self.max_body_cell_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
-            header += (
-                st.STParams["ascii_border_char"]
-                + st.STParams["ascii_mid_rule_char"] * (self._len)
-                + f"{st.STParams['ascii_border_char']}\n"
-            )
+
+        if self.table.custom_lines["after-columns"]:
+            for line in self.table.custom_lines["after-columns"]:
+                header += self._create_line(line)
+        header += (
+            st.STParams["ascii_border_char"]
+            + st.STParams["ascii_mid_rule_char"] * (self._len)
+            + f"{st.STParams['ascii_border_char']}\n"
+        )
         return header
 
     # get the length of the header lines by counting number of characters in each column

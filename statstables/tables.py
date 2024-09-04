@@ -101,10 +101,10 @@ class Table(ABC):
         # TODO: Allow for placing the multicolumns below the table body
         if not spans:
             spans = [self.ncolumns]
-        assert len(columns) == len(spans), "columns and spans must be the same length"
+        assert len(columns) == len(spans), "A span must be provided for each column"
         assert (
             sum(spans) == self.ncolumns
-        ), "The sum of spans must equal the number of columns"
+        ), f"The sum of spans must equal the number of columns. There are {self.ncolumns} columns, but spans sum to {sum(spans)}"
         _position = len(self._multicolumns) if position is None else position
         self._multicolumns.insert(_position, (columns, spans, underline))
 
@@ -284,7 +284,7 @@ class Table(ABC):
         elif index is not None:
             self.custom_lines[location].pop(index)
 
-    def add_latex_line(self, line: str, location: str = "bottom") -> None:
+    def add_latex_line(self, line: str, location: str = "after-body") -> None:
         """
         Add line that will only be rendered in the LaTeX output. This method
         assumes the line is formatted as needed, including escape characters and
@@ -997,8 +997,15 @@ class ModelTable(Table):
         order : list
             List of the parameters in the order you want them to appear in the table.
         """
+        assert isinstance(order, list), "`order` must be a list"
+        missing = ""
         for p in order:
-            assert p in self.all_param_labels
+            if p not in self.all_param_labels:
+                missing += f"{p}\n"
+        if missing:
+            raise ValueError(
+                f"The following parameters are not in the models:\n{missing}"
+            )
         self.param_labels = order
 
     def _create_rows(self):
@@ -1132,8 +1139,8 @@ class ModelTable(Table):
         if len(self._multicolumns) > 0:
             try:
                 col = (
-                    ["", f"Dependent Variable: {self.dependent_variable_name}"],
-                    [1, self.ncolumns - 1],
+                    [f"Dependent Variable: {self.dependent_variable_name}"],
+                    [self.ncolumns],
                     True,
                 )
                 self.remove_multicolumn(col)
@@ -1142,7 +1149,7 @@ class ModelTable(Table):
         self._dependent_variable_name = name
         if name != "":
             self.add_multicolumns(
-                ["", f"Dependent Variable: {name}"], [1, self.ncolumns - 1], position=0
+                [f"Dependent Variable: {name}"], [self.ncolumns], position=0
             )
 
     ##### Properties #####
