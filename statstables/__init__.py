@@ -1,7 +1,10 @@
 from statstables import tables, renderers, utils, modeltables
 from statsmodels.base.wrapper import ResultsWrapper
 from statsmodels.regression.linear_model import RegressionResultsWrapper
-from statsmodels.discrete.discrete_model import BinaryResultsWrapper
+from statsmodels.discrete.discrete_model import (
+    BinaryResultsWrapper,
+    PoissonResultsWrapper,
+)
 from linearmodels.iv.results import IVResults, OLSResults
 from linearmodels.panel.results import (
     PanelEffectsResults,
