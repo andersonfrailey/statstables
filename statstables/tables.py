@@ -740,8 +740,8 @@ class MeanDifferenceTable(Table):
                         )
                     ]
                 )
-                note = f"Significance levels: {stars}"
-                self.add_note(note, alignment="r", escape=False)
+                note = f"{stars}"
+                self.add_note(note, alignment="l", escape=False)
             output = render_func(self, **kwargs)
             # remove all the supurflous lines that may not be needed in future renders
             if self.show_n:

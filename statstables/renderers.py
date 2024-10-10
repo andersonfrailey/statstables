@@ -350,7 +350,7 @@ class ASCIIRenderer(Renderer):
             st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
             + "\n"
         )
-        if st.STParams["double_top_rule"]:
+        if st.STParams["ascii_double_top_rule"]:
             header += (
                 st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
                 + "\n"
@@ -444,7 +444,7 @@ class ASCIIRenderer(Renderer):
             footer += st.STParams["ascii_footer_char"] * (
                 self._len + (2 * self._border_len)
             )
-            if st.STParams["double_bottom_rule"]:
+            if st.STParams["ascii_double_bottom_rule"]:
                 footer += st.STParams["ascii_footer_char"] * (
                     self._len + (2 * self._border_len)
                 )
@@ -512,7 +512,8 @@ class ASCIIRenderer(Renderer):
         if self.table.show_columns:
             col_len = 0
             for col in self.table.columns:
-                col_size = len(str(col)) + (self.padding * 2)
+                label = self.table._column_labels.get(col, col)
+                col_size = len(str(label)) + (self.padding * 2)
                 self.max_body_cell_size = max(self.max_body_cell_size, col_size)
                 col_len += col_size
             if self.table.include_index:

@@ -29,11 +29,13 @@ class Params(dict):
 STParams = Params()
 STParams["ascii_padding"] = 2
 STParams["ascii_header_char"] = "="
-STParams["ascii_footer_char"] = "="
+STParams["ascii_footer_char"] = "-"
 STParams["ascii_border_char"] = ""
 STParams["ascii_mid_rule_char"] = "-"
 STParams["double_top_rule"] = True
+STParams["ascii_double_top_rule"] = False
 STParams["double_bottom_rule"] = False
+STParams["ascii_doublt_bottom_rule"] = False
 STParams["max_html_notes_length"] = 80
 STParams["max_ascii_notes_length"] = 80
 STParams["index_alignment"] = "l"
