@@ -32,6 +32,8 @@ VALID_LINE_LOCATIONS = [
     "after-columns",
     "after-body",
     "after-footer",
+    "after-model-stats",
+    "before-model-stats",
 ]
 
 

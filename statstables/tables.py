@@ -228,6 +228,7 @@ class Table(ABC):
         line: list[str],
         location: str = "after-body",
         label: str = "",
+        deliminate: bool = False,
         position: int | None = None,
     ) -> None:
         """
@@ -246,11 +247,19 @@ class Table(ABC):
             Where on the table to place the line, by default "bottom"
         label : str, optional:
             The index label for the line, by default ""
+        deliminate: bool, optional
+            If true, a horizontal line will be placed above the line
+        position : int, optional:
+            The position in the order of lines to insert this line
         """
         validate_line_location(location)
-        assert len(line) == self.ncolumns, "Line must have the same number of columns"
+        assert (
+            len(line) == self.ncolumns
+        ), f"Line must have the same number of columns. There are {self.ncolumns} but only {len(line)} line entries"
         _position = len(self.custom_lines[location]) if position is None else position
-        self.custom_lines[location].insert(_position, {"line": line, "label": label})
+        self.custom_lines[location].insert(
+            _position, {"line": line, "label": label, "deliminate": deliminate}
+        )
 
     def remove_line(
         self, location: str, line: list | None = None, index: int | None = None
@@ -396,7 +405,9 @@ class Table(ABC):
         Path(outfile).write_text(tex_str)
         return None
 
-    def render_html(self, outfile: Union[str, Path, None] = None) -> Union[str, None]:
+    def render_html(
+        self, outfile: Union[str, Path, None] = None, table_class=""
+    ) -> Union[str, None]:
         """
         Render the table in HTML. Note that you will need to include the booktabs
         package in your LaTeX document. If no outfile is provided, the LaTeX
@@ -417,7 +428,7 @@ class Table(ABC):
             If an outfile is not specified, the HTML string will be returned.
             Otherwise None will be returned.
         """
-        html_str = HTMLRenderer(self).render()
+        html_str = HTMLRenderer(self, _class=table_class).render()
         if not outfile:
             return html_str
         Path(outfile).write_text(html_str)
@@ -438,6 +449,8 @@ class Table(ABC):
     def _default_formatter(self, value: Union[int, float, str]) -> str:
         if isinstance(value, (int, float)):
             return f"{value:{self.thousands_sep}.{self.sig_digits}f}"
+        elif isinstance(value, int):
+            return f"{value:{self.thousands_sep}}"
         elif isinstance(value, str):
             return value
         return value

@@ -12,7 +12,15 @@ from linearmodels.panel.results import (
     RandomEffectsResults,
 )
 
-__all__ = ["STParams", "SupportedModels"]
+__all__ = [
+    "STParams",
+    "SupportedModels",
+    "tables",
+    "modeltables",
+    "renderers",
+    "utils",
+    "ResultsWrapper",
+]
 
 
 class Params(dict):
@@ -35,7 +43,7 @@ STParams["ascii_mid_rule_char"] = "-"
 STParams["double_top_rule"] = True
 STParams["ascii_double_top_rule"] = False
 STParams["double_bottom_rule"] = False
-STParams["ascii_doublt_bottom_rule"] = False
+STParams["ascii_double_bottom_rule"] = False
 STParams["max_html_notes_length"] = 80
 STParams["max_ascii_notes_length"] = 80
 STParams["index_alignment"] = "l"
@@ -45,6 +53,7 @@ SupportedModels = {
     RegressionResultsWrapper: modeltables.StatsModelsData,
     ResultsWrapper: modeltables.StatsModelsData,
     BinaryResultsWrapper: modeltables.StatsModelsData,
+    PoissonResultsWrapper: modeltables.StatsModelsData,
     IVResults: modeltables.LinearModelsData,
     OLSResults: modeltables.LinearModelsData,
     PanelEffectsResults: modeltables.LinearModelsData,
