@@ -37,7 +37,7 @@ VALID_LINE_LOCATIONS = [
 ]
 
 
-def validate_line_location(line_location: str) -> None:
+def validate_line_location(line_location: str | None) -> None:
     if line_location not in VALID_LINE_LOCATIONS:
         raise ValueError(
             f"Invalid line location: {line_location}. "

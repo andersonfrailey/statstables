@@ -1,4 +1,12 @@
-from statstables import tables, renderers, utils, modeltables
+from statstables import (
+    tables,
+    renderers,
+    utils,
+    modeltables,
+    parameters,
+    cellformatting,
+)
+from statstables.parameters import STParams
 from statsmodels.base.wrapper import ResultsWrapper
 from statsmodels.regression.linear_model import RegressionResultsWrapper
 from statsmodels.discrete.discrete_model import (
@@ -20,34 +28,9 @@ __all__ = [
     "renderers",
     "utils",
     "ResultsWrapper",
+    "parameters",
+    "cellformatting",
 ]
-
-
-class Params(dict):
-    def __init__(self, *args, **kwargs) -> None:
-        self.update(*args, **kwargs)
-
-    def _set(self, key, val):
-        dict.__setitem__(self, key, val)
-
-    def _get(self, key):
-        return dict.__getitem__(self, key)
-
-
-STParams = Params()
-STParams["ascii_padding"] = 2
-STParams["ascii_header_char"] = "="
-STParams["ascii_footer_char"] = "-"
-STParams["ascii_border_char"] = ""
-STParams["ascii_mid_rule_char"] = "-"
-STParams["double_top_rule"] = True
-STParams["ascii_double_top_rule"] = False
-STParams["double_bottom_rule"] = False
-STParams["ascii_double_bottom_rule"] = False
-STParams["max_html_notes_length"] = 80
-STParams["max_ascii_notes_length"] = 80
-STParams["index_alignment"] = "l"
-STParams["column_alignment"] = "c"
 
 SupportedModels = {
     RegressionResultsWrapper: modeltables.StatsModelsData,
