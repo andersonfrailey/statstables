@@ -64,17 +64,6 @@ class Table(ABC):
         """
         Resets all parameters to their default values
         """
-        # self.caption_location = "top"
-        # self.caption = None
-        # self.label = None
-        # self.sig_digits = 3
-        # self.thousands_sep = ","
-        # self._multiindex = []
-        # self.include_index = False
-        # self.index_name = ""
-        # self.show_columns = True
-        # self.index_alignment = st.STParams["index_alignment"]
-        # self.column_alignment = st.STParams["column_alignment"]
 
     def reset_custom_features(self):
         self._multicolumns = []
@@ -598,15 +587,6 @@ class Table(ABC):
     def _repr_html_(self):
         return self.render_html()
 
-    # def __getattr__(self, attr):
-    #     try:
-    #         return self.__dict__["table_params"][attr]
-    #     except KeyError:
-    #         raise AttributeError(f"Table has no attribute or parameter named '{attr}'")
-    # if attr in self.table_params:
-    #     return self.table_params[attr]
-    # raise AttributeError(f"Table has no attribute or parameter named '{attr}'")
-
     def _default_formatter(self, value: Union[int, float, str], **kwargs) -> str:
         thousands_sep = self.table_params["thousands_sep"]
         sig_digits = self.table_params["sig_digits"]
@@ -675,14 +655,6 @@ class Table(ABC):
         """
         return self.table_params["caption_location"]
 
-    # @caption_location.setter
-    # def caption_location(self, location: str) -> None:
-    #     # assert location in [
-    #     #     "top",
-    #     #     "bottom",
-    #     # ], "caption_location must be 'top' or 'bottom'"
-    #     self.table_params["caption_location"] = location
-
     @property
     def caption(self) -> str | None:
         """
@@ -708,42 +680,6 @@ class Table(ABC):
         assert isinstance(label, (str, type(None))), "Label must be a string"
         self._label = label
 
-    # @property
-    # def sig_digits(self) -> int:
-    #     """
-    #     Number of significant digits to include in the table
-    #     """
-    #     return self.table_params["sig_digits"]
-
-    # @sig_digits.setter
-    # def sig_digits(self, digits: int) -> None:
-    #     # assert isinstance(digits, int), "sig_digits must be an integer"
-    #     self.table_params["sig_digits"] = digits
-
-    # @property
-    # def thousands_sep(self) -> str:
-    #     """
-    #     Character to use as the thousands separator in the table
-    #     """
-    #     return self.table_params["thousands_sep"]
-
-    # @thousands_sep.setter
-    # def thousands_sep(self, sep: str) -> None:
-    #     # assert isinstance(sep, str), "thousands_sep must be a string"
-    #     self.table_params["thousands_sep"] = sep
-
-    # @property
-    # def include_index(self) -> bool:
-    #     """
-    #     Whether or not to include the index in the table
-    #     """
-    #     return self.table_params["include_index"]
-
-    # @include_index.setter
-    # def include_index(self, include: bool) -> None:
-    #     # assert isinstance(include, bool), "include_index must be True or False"
-    #     self.table_params["include_index"] = include
-
     @property
     def index_name(self) -> str:
         """
@@ -755,32 +691,6 @@ class Table(ABC):
     def index_name(self, name: str) -> None:
         assert isinstance(name, str), "index_name must be a string"
         self._index_name = name
-
-    # @property
-    # def show_columns(self) -> bool:
-    #     """
-    #     Whether or not to show the column labels in the table
-    #     """
-    #     return self.table_params["show_columns"]
-
-    # @show_columns.setter
-    # def show_columns(self, show: bool) -> None:
-    #     # assert isinstance(show, bool), "show_columns must be True or False"
-    #     self.table_params["show_columns"] = show
-
-    # @property
-    # def column_alignment(self) -> str:
-    #     """
-    #     Alignment of the column labels in the table
-    #     """
-    #     return self.table_params["column_alignment"]
-
-    # @column_alignment.setter
-    # def column_alignment(self, alignment: str) -> None:
-    #     # assert (
-    #     #     alignment in self.VALID_ALIGNMENTS
-    #     # ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
-    #     self.table_params["column_alignment"] = alignment
 
 
 class GenericTable(Table):
@@ -936,12 +846,6 @@ class MeanDifferenceTable(Table):
 
     def reset_params(self):
         super().reset_params()
-        # self.table_params["show_n"] = True
-        # self.table_params["show_standard_errors"] = True
-        # self.table_params["p_values"] = [0.1, 0.05, 0.01]
-        # self.table_params["include_index"] = True
-        # self.table_params["show_stars"] = True
-        # self.table_params["show_significance_levels"] = True
 
     def reset_param(self, param: str, to_default: bool = False) -> None:
         """
@@ -961,6 +865,7 @@ class MeanDifferenceTable(Table):
         -------
         None
         """
+        self.table_params[0].pop(param)
         # if to default, remove parameter from user provided defaults
         if to_default:
             self.table_params[1].pop(param)
@@ -975,7 +880,7 @@ class MeanDifferenceTable(Table):
     @staticmethod
     def _render(render_func):
         def wrapper(self, **kwargs):
-            if self.show_n:
+            if self.table_params["show_n"]:
                 self.add_line(
                     [
                         f"N={self.grp_sizes[c]:,}" if c in self.grp_sizes.index else ""
@@ -983,7 +888,7 @@ class MeanDifferenceTable(Table):
                     ],
                     location="after-columns",
                 )
-            if self.show_significance_levels:
+            if self.table_params["show_significance_levels"]:
                 _p = "p<"
                 if render_func.__name__ == "render_latex":
                     _p = "p$<$"
@@ -999,9 +904,9 @@ class MeanDifferenceTable(Table):
                 self.add_note(note, alignment="l", escape=False)
             output = render_func(self, **kwargs)
             # remove all the supurflous lines that may not be needed in future renders
-            if self.show_n:
+            if self.table_params["show_n"]:
                 self.remove_line(location="after-columns", index=-1)
-            if self.show_significance_levels:
+            if self.table_params["show_significance_levels"]:
                 self.remove_note(index=-1)
                 print("Note: Standard errors assume samples are drawn independently.")
             return output
@@ -1009,11 +914,11 @@ class MeanDifferenceTable(Table):
         return wrapper
 
     @_render
-    def render_latex(self, outfile=None, only_tabular=False) -> Union[str, None]:
+    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
         return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, outfile=None) -> Union[str, None]:
+    def render_html(self, outfile=None) -> str | None:
         return super().render_html(outfile)
 
     @_render
@@ -1070,7 +975,7 @@ class MeanDifferenceTable(Table):
             ]
             for col, value in zip(row.index, row.values):
                 formatted_val = self._format_value(_index, col, value)
-                if self.show_standard_errors:
+                if self.table_params["show_standard_errors"]:
                     try:
                         se = self.sem.loc[_index, col]
                         formatted_se = self._format_value(_index, col, se)
@@ -1078,7 +983,7 @@ class MeanDifferenceTable(Table):
                         sem_row.append(formatted_se)
                     except KeyError:
                         sem_row.append(self._format_value(_index, col, ""))
-                if self.show_stars:
+                if self.table_params["show_stars"]:
                     try:
                         pval = self.pvalues[f"{col}_{_index}"]
                         stars = pstars(pval, self.table_params["p_values"])
@@ -1087,49 +992,9 @@ class MeanDifferenceTable(Table):
                     formatted_val["value"] = f"{formatted_val['value']}{stars}"
                 _row.append(formatted_val)
             rows.append(_row)
-            if self.show_standard_errors:
+            if self.table_params["show_standard_errors"]:
                 rows.append(sem_row)
         return rows
-
-    ##### Properties #####
-
-    @property
-    def show_n(self) -> bool:
-        return self.table_params["show_n"]
-
-    @show_n.setter
-    def show_n(self, value: bool) -> None:
-        # self._validate_input_type(value, bool)
-        self.table_params["show_n"] = value
-
-    @property
-    def show_standard_errors(self) -> bool:
-        return self.table_params["show_standard_errors"]
-
-    @show_standard_errors.setter
-    def show_standard_errors(self, value: bool) -> None:
-        # self._validate_input_type(value, bool)
-        self.table_params["show_standard_errors"] = value
-
-    @property
-    def show_stars(self) -> bool:
-        return self.table_params["show_stars"]
-
-    @show_stars.setter
-    def show_stars(self, value: bool) -> None:
-        # self._validate_input_type(value, bool)
-        self.table_params["show_stars"] = value
-        if not value:
-            self.table_params["show_significance_levels"] = False
-
-    @property
-    def show_significance_levels(self) -> bool:
-        return self.table_params["show_significance_levels"]
-
-    @show_significance_levels.setter
-    def show_significance_levels(self, value: bool) -> None:
-        # self._validate_input_type(value, bool)
-        self.table_params["show_significance_levels"] = value
 
 
 class SummaryTable(GenericTable):
@@ -1431,7 +1296,7 @@ class ModelTable(Table):
             for i, mod in enumerate(self.models):
                 try:
                     val = mod.get_formatted_value(stat, self.table_params["sig_digits"])
-                    if pvalue and self.show_stars:
+                    if pvalue and self.table_params["show_stars"]:
                         stars = pstars(
                             getattr(mod, f"{stat}_pvalue"),
                             self.table_params["p_values"],
@@ -1516,145 +1381,6 @@ class ModelTable(Table):
             self.add_multicolumns(
                 [f"Dependent Variable: {name}"], [self.ncolumns], position=0
             )
-
-    ##### Properties #####
-
-    # @property
-    # def show_r2(self) -> bool:
-    #     return self.table_params["show_r2"]
-
-    # @show_r2.setter
-    # def show_r2(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_r2"] = show
-
-    # @property
-    # def show_adjusted_r2(self) -> bool:
-    #     return self.table_params["show_adjusted_r2"]
-
-    # @show_adjusted_r2.setter
-    # def show_adjusted_r2(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_adjusted_r2"] = show
-
-    # @property
-    # def show_pseudo_r2(self) -> bool:
-    #     return self.table_params["show_pseudo_r2"]
-
-    # @show_pseudo_r2.setter
-    # def show_pseudo_r2(self, show: bool) -> None:
-    #     assert isinstance(show, bool)
-    #     self.table_params["show_pseudo_r2"] = show
-
-    # @property
-    # def show_dof(self) -> bool:
-    #     return self.table_params["show_dof"]
-
-    # @show_dof.setter
-    # def show_dof(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_dof"] = show
-
-    # @property
-    # def show_cis(self) -> bool:
-    #     return self.table_params["show_cis"]
-
-    # @show_cis.setter
-    # def show_cis(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_cis"] = show
-
-    # @property
-    # def show_ses(self) -> bool:
-    #     return self.table_params["show_ses"]
-
-    # @show_ses.setter
-    # def show_ses(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_ses"] = show
-
-    # @property
-    # def show_fstat(self) -> bool:
-    #     return self.table_params["show_fstat"]
-
-    # @show_fstat.setter
-    # def show_fstat(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_fstat"] = show
-
-    # @property
-    # def single_row(self) -> bool:
-    #     return self.table_params["single_row"]
-
-    # @single_row.setter
-    # def single_row(self, single: bool) -> None:
-    #     # assert isinstance(single, bool)
-    #     self.table_params["single_row"] = single
-
-    # @property
-    # def show_observations(self) -> bool:
-    #     return self.table_params["show_observations"]
-
-    # @show_observations.setter
-    # def show_observations(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_observations"] = show
-
-    # @property
-    # def show_ngroups(self) -> bool:
-    #     return self.table_params["show_ngroups"]
-
-    # @show_ngroups.setter
-    # def show_ngroups(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_ngroups"] = show
-
-    # @property
-    # def show_model_numbers(self) -> bool:
-    #     return self.table_params["show_model_numbers"]
-
-    # @show_model_numbers.setter
-    # def show_model_numbers(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_model_numbers"] = show
-
-    # @property
-    # def show_model_type(self) -> bool:
-    #     return self.table_params["show_model_type"]
-
-    # @show_model_type.setter
-    # def show_model_type(self, show: bool) -> None:
-    #     # assert isinstance(show, bool)
-    #     self.table_params["show_model_type"] = show
-
-    # @property
-    # def show_stars(self) -> bool:
-    #     return self.table_params["show_stars"]
-
-    # @show_stars.setter
-    # def show_stars(self, value: bool) -> None:
-    #     # self._validate_input_type(value, bool)
-    #     self.table_params["show_stars"] = value
-    #     if not value:
-    #         self.table_params["show_significance_levels"] = False
-
-    # @property
-    # def show_significance_levels(self) -> bool:
-    #     return self.table_params["show_significance_levels"]
-
-    # @show_significance_levels.setter
-    # def show_significance_levels(self, value: bool) -> None:
-    #     # self._validate_input_type(value, bool)
-    #     self.table_params["show_significance_levels"] = value
-
-    # @property
-    # def p_values(self) -> list:
-    #     return self.table_params["p_values"]
-
-    # @p_values.setter
-    # def p_values(self, values: list) -> None:
-    #     # self._validate_input_type(values, list)
-    #     self.table_params["p_values"] = values
 
 
 class PanelTable:
