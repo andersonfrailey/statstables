@@ -548,6 +548,11 @@ class Table(ABC):
         tex_str = LatexRenderer(self).render(only_tabular=only_tabular)
         if not outfile:
             return tex_str
+        preamble = r"% You must add \usepackage{booktabs} to your LaTex document for table to compile."
+        preamble += "\n"
+        preamble += r"% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble."
+        preamble += "\n\n"
+        tex_str = preamble + tex_str
         Path(outfile).write_text(tex_str)
         return None
 
