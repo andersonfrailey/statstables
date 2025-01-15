@@ -136,7 +136,6 @@ BOOL_MEAN_DIFFS_TABLE_PARAMS = {
     "show_standard_errors",
     "show_stars",
     "show_significance_levels",
-    "include_index",
 }
 
 
@@ -150,6 +149,10 @@ class MeanDiffsTableParams(TableParams):
         elif name == "p_values":
             assert isinstance(value, list), "p_values must be a list"
             assert all(isinstance(p, float) for p in value), "p_values must be floats"
+        elif name == "include_index":
+            raise AttributeError(
+                "include_index is not a valid parameter for MeanDifferencesTable"
+            )
         else:
             super()._validate_param(name, value)
 

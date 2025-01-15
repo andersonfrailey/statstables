@@ -74,8 +74,8 @@ class Table(ABC):
         self.custom_tex_lines = defaultdict(list)
         self.custom_html_lines = defaultdict(list)
 
-    def reset_all(self):
-        self.reset_params()
+    def reset_all(self, restore_to_defaults=False):
+        self.reset_params(restore_to_defaults)
         self.reset_custom_features()
 
     def update_parameter(self, param, value):
@@ -710,6 +710,7 @@ class GenericTable(Table):
         self.columns = df.columns
         self.nrows = df.shape[0]
         super().__init__(**kwargs)
+        self.table_params["include_index"] = True
 
     def reset_params(self, restore_to_defaults=False):
         super().reset_params(restore_to_defaults)
@@ -751,7 +752,6 @@ class MeanDifferenceTable(Table):
         sig_digits: int = 3,
         thousands_sep: str = ",",
         show_columns: bool = True,
-        include_index: bool = False,
         show_n: bool | None = None,
         show_standard_errors: bool | None = None,
         p_values: list | None = None,
@@ -795,7 +795,6 @@ class MeanDifferenceTable(Table):
                 "sig_digits": sig_digits,
                 "thousands_sep": thousands_sep,
                 "show_columns": show_columns,
-                "include_index": include_index,
                 "show_n": show_n,
                 "show_standard_errors": show_standard_errors,
                 "p_values": p_values,
@@ -1004,7 +1003,7 @@ class MeanDifferenceTable(Table):
 class SummaryTable(GenericTable):
     def __init__(self, df: pd.DataFrame, var_list: list[str], **kwargs):
         summary_df = df[var_list].describe()
-        super().__init__(summary_df)
+        super().__init__(summary_df, **kwargs)
         self.reset_custom_features()
 
     def reset_custom_features(self):

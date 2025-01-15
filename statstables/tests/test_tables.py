@@ -1,6 +1,7 @@
 """
 Tests implementation of tables
 """
+
 import pytest
 import statsmodels.formula.api as smf
 from statstables import tables
@@ -75,6 +76,8 @@ def test_mean_differences_table(data):
     table.render_html()
     table.render_latex()
 
+    assert table.table_params["include_index"] == True
+
 
 def test_model_table(data):
     mod1 = smf.ols("A ~ B + C -1", data=data).fit()
@@ -94,3 +97,5 @@ def test_model_table(data):
     binary_table.table_params["show_pseudo_r2"] = False
     binary_text = binary_table.render_html()
     assert "Pseudo R<sup>2</sup>" not in binary_text
+
+    assert binary_table.table_params["include_index"] == True

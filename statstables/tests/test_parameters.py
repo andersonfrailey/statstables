@@ -1,6 +1,7 @@
 """
 Test parameter implementations
 """
+
 import pytest
 import statstables as st
 import statsmodels.formula.api as smf
@@ -42,9 +43,10 @@ def general_parameter_tests(table, table_type):
         "double_bottom_rule",
         "ascii_double_bottom_rule",
     ]
+    include_index_invalid = ["meandiffs", "model"]
     for prop in bool_properties:
         # include index isn't allowed for model tables
-        if table_type == "Model" and prop == "include_index":
+        if table_type in include_index_invalid and prop == "include_index":
             continue
         table.table_params[prop] = True
         table.table_params[prop] = False
@@ -100,12 +102,16 @@ def test_mean_differences_table_params(data):
         table.table_params["p_values"] = ["ten", "five", "one"]
         table.table_params["p_values"] = [10, 5, 1]
 
+    with pytest.raises(AttributeError):
+        table.table_params["include_index"] = True
+        table.table_params["include_index"] = False
+
 
 def test_model_table_params(data):
     mod1 = smf.ols("A ~ B + C -1", data=data).fit()
     mod2 = smf.ols("A ~ B + C", data=data).fit()
     mod_table = st.tables.ModelTable(models=[mod1, mod2])
-    general_parameter_tests(mod_table, "Model")
+    general_parameter_tests(mod_table, "model")
 
     with pytest.raises(AttributeError):
         mod_table.table_params["include_index"] = True
