@@ -36,8 +36,6 @@ class Table(ABC):
         formatters: dict | None = None,
         **kwargs,
     ):
-        # self.reset_params()
-
         user_params = {
             k: v
             for k, v in {
@@ -60,10 +58,11 @@ class Table(ABC):
         self.index_name = index_name
         self.custom_formatters(formatters)
 
-    def reset_params(self) -> None:
+    def reset_params(self, restore_to_defaults=False) -> None:
         """
         Resets all parameters to their default values
         """
+        self.table_params.reset_params(restore_to_defaults)
 
     def reset_custom_features(self):
         self._multicolumns = []
@@ -78,6 +77,12 @@ class Table(ABC):
     def reset_all(self):
         self.reset_params()
         self.reset_custom_features()
+
+    def update_parameter(self, param, value):
+        """
+        Helper method for updating a parameter
+        """
+        self.table_params[param] = value
 
     def rename_columns(self, column_labels: dict | None) -> None:
         """
@@ -705,10 +710,9 @@ class GenericTable(Table):
         self.columns = df.columns
         self.nrows = df.shape[0]
         super().__init__(**kwargs)
-        self.reset_params()
 
-    def reset_params(self):
-        super().reset_params()
+    def reset_params(self, restore_to_defaults=False):
+        super().reset_params(restore_to_defaults)
         self.table_params["include_index"] = True
 
     def reset_custom_features(self):
@@ -844,8 +848,8 @@ class MeanDifferenceTable(Table):
         self.index_name = index_name
         self.custom_formatters(formatters)
 
-    def reset_params(self):
-        super().reset_params()
+    def reset_params(self, restore_to_defaults=False):
+        super().reset_params(restore_to_defaults)
 
     def reset_param(self, param: str, to_default: bool = False) -> None:
         """
@@ -1001,11 +1005,7 @@ class SummaryTable(GenericTable):
     def __init__(self, df: pd.DataFrame, var_list: list[str], **kwargs):
         summary_df = df[var_list].describe()
         super().__init__(summary_df)
-        self.reset_params()
         self.reset_custom_features()
-
-    def reset_params(self) -> None:
-        super().reset_params()
 
     def reset_custom_features(self):
         super().reset_custom_features()
@@ -1146,7 +1146,6 @@ class ModelTable(Table):
             dep_vars.append(mod_obj.dependent_variable)
 
         self.all_param_labels = sorted(self.params)
-        self.reset_params()
         self.table_params = ModelTableParams(user_params)
         self.reset_custom_features()
         self.rename_columns(column_labels)
@@ -1162,9 +1161,6 @@ class ModelTable(Table):
         # name by default.
         if all(var == dep_vars[0] for var in dep_vars):
             self.dependent_variable_name = dep_vars[0]
-
-    def reset_params(self):
-        super().reset_params()
 
     def reset_custom_features(self):
         super().reset_custom_features()

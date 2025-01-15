@@ -40,6 +40,32 @@ DEFAULT_TABLE_PARAMS = {
     "show_columns": True,
 } | STParams
 
+BOOL_TABLE_PARAMS = {
+    "double_top_rule",
+    "ascii_double_top_rule",
+    "double_bottom_rule",
+    "ascii_double_bottom_rule",
+    "include_index",
+    "show_columns",
+}
+
+STR_TABLE_PARAMS = {
+    "ascii_header_char",
+    "ascii_footer_char",
+    "ascii_border_char",
+    "ascii_mid_rule_char",
+    "index_alignment",
+    "column_alignment",
+    "caption_location",
+    "thousands_sep",
+}
+INT_TABLE_PARAMS = {
+    "ascii_padding",
+    "max_html_notes_length",
+    "max_ascii_notes_length",
+    "sig_digits",
+}
+
 
 class TableParams(ChainMap):
     VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
@@ -48,7 +74,6 @@ class TableParams(ChainMap):
         self, user_params: dict, default_params: dict = DEFAULT_TABLE_PARAMS
     ) -> None:
         super().__init__({}, user_params, default_params)
-        # self.params = ChainMap({}, user_params, self.DEFAULT_TABLE_PARAMS)
 
     def __getitem__(self, name):
         return super().__getitem__(name)
@@ -70,47 +95,31 @@ class TableParams(ChainMap):
         if restore_to_defaults:
             self.maps[0].clear()
             self.maps[1].clear()
-            # self.params = ChainMap({}, {}, self.DEFAULT_TABLE_PARAMS)
         else:
-            # self.params.clear()
             self.maps[0].clear()
 
     # Parameter validation
-    def _validate_param(self, name, value):
+    def _validate_param(self, name: str, value: bool | str | int) -> None:
+        # type validation
+        if name in BOOL_TABLE_PARAMS:
+            assert isinstance(value, bool), f"{name} must be True or False"
+        elif name in STR_TABLE_PARAMS:
+            assert isinstance(value, str), f"{name} must be a string"
+        elif name in INT_TABLE_PARAMS:
+            assert isinstance(value, int), f"{name} must be an integer"
+        # value validation
         match name:
             case "caption_location":
                 assert value in [
                     "top",
                     "bottom",
                 ], "caption_location must be 'top' or 'bottom'"
-            case "sig_digits":
-                assert isinstance(value, int), "sig_digits must be an integer"
-            case "thousands_sep":
-                assert isinstance(value, str), "thousands_sep must be a string"
-            case "include_index":
-                assert isinstance(value, bool), "include_index must be True or False"
-            case "show_columns":
-                assert isinstance(value, bool), "show_columns must be True or False"
             case "column_alignment":
                 assert (
                     value in self.VALID_ALIGNMENTS
                 ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
             case _:
-                raise AttributeError(f"Invalid parameter: {name}")
-
-    # @property
-    # def index_alignment(self) -> str:
-    #     """
-    #     Alignment of the index column in the table
-    #     """
-    #     return self.params["index_alignment"]
-
-    # @index_alignment.setter
-    # def index_alignment(self, alignment: str) -> None:
-    #     assert (
-    #         alignment in self.VALID_ALIGNMENTS
-    #     ), f"index_alignment must be in {self.VALID_ALIGNMENTS}"
-    #     self.params["index_alignment"] = alignment
+                ...
 
 
 DEFAULT_MEAN_DIFFS_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
@@ -122,41 +131,27 @@ DEFAULT_MEAN_DIFFS_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
     "show_significance_levels": True,
 }
 
+BOOL_MEAN_DIFFS_TABLE_PARAMS = {
+    "show_n",
+    "show_standard_errors",
+    "show_stars",
+    "show_significance_levels",
+    "include_index",
+}
+
 
 class MeanDiffsTableParams(TableParams):
     def __init__(self, user_params: dict) -> None:
-        # self.params = ChainMap({}, user_params, self.DEFAULT_TABLE_PARAMS)
         super().__init__(user_params, DEFAULT_MEAN_DIFFS_TABLE_PARAMS)
 
     def _validate_param(self, name, value):
-        match name:
-            case "show_n":
-                assert isinstance(value, bool), "show_n must be True or False"
-            case "show_standard_errors":
-                assert isinstance(
-                    value, bool
-                ), "show_standard_errors must be True or False"
-            case "p_values":
-                assert isinstance(value, list), "p_values must be a list"
-            case "include_index":
-                assert isinstance(value, bool), "include_index must be True or False"
-            case "show_stars":
-                assert isinstance(value, bool), "show_stars must be True or False"
-            case "show_significance_levels":
-                assert isinstance(
-                    value, bool
-                ), "show_significance_levels must be True or False"
-            case _:
-                super()._validate_param(name, value)
-
-    # def reset_params(self, restore_to_defaults=False):
-    #     """
-    #     Clear all of the user provided parameters
-    #     """
-    #     if restore_to_defaults:
-    #         self.params = ChainMap({}, {}, self.DEFAULT_TABLE_PARAMS)
-    #     else:
-    #         self.params.clear()
+        if name in BOOL_MEAN_DIFFS_TABLE_PARAMS:
+            assert isinstance(value, bool), f"{name} must be True or False"
+        elif name == "p_values":
+            assert isinstance(value, list), "p_values must be a list"
+            assert all(isinstance(p, float) for p in value), "p_values must be floats"
+        else:
+            super()._validate_param(name, value)
 
 
 DEFAULT_MODEL_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
@@ -179,52 +174,39 @@ DEFAULT_MODEL_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
     "show_significance_levels": True,
 }
 
+BOOL_MODEL_TABLE_PARAMS = {
+    "show_r2",
+    "show_adjusted_r2",
+    "show_pseudo_r2",
+    "show_dof",
+    "show_ses",
+    "show_cis",
+    "show_fstat",
+    "single_row",
+    "show_observations",
+    "show_ngroups",
+    "show_model_numbers",
+    "show_stars",
+    "show_model_type",
+    "show_significance_levels",
+}
+
 
 class ModelTableParams(TableParams):
     def __init__(self, user_params: dict) -> None:
-        # self.params = ChainMap({}, user_params, self.DEFAULT_TABLE_PARAMS)
         super().__init__(user_params, DEFAULT_MODEL_TABLE_PARAMS)
 
     def _validate_param(self, name, value):
-        match name:
-            case "show_r2":
-                assert isinstance(value, bool), "show_r2 must be True or False"
-            case "show_adjusted_r2":
-                assert isinstance(value, bool), "show_adjusted_r2 must be True or False"
-            case "show_pseudo_r2":
-                assert isinstance(value, bool), "show_pseudo_r2 must be True or False"
-            case "show_dof":
-                assert isinstance(value, bool), "show_dof must be True or False"
-            case "show_ses":
-                assert isinstance(value, bool), "show_ses must be True or False"
-            case "show_cis":
-                assert isinstance(value, bool), "show_cis must be True or False"
-            case "show_fstat":
-                assert isinstance(value, bool), "show_fstat must be True or False"
-            case "single_row":
-                assert isinstance(value, bool), "single_row must be True or False"
-            case "show_observations":
-                assert isinstance(
-                    value, bool
-                ), "show_observations must be True or False"
-            case "show_ngroups":
-                assert isinstance(value, bool), "show_ngroups must be True or False"
-            case "show_model_numbers":
-                assert isinstance(
-                    value, bool
-                ), "show_model_numbers must be True or False"
-            case "show_model_type":
-                assert isinstance(value, bool), "show_model_type must be True or False"
-            case "dependent_variable":
-                assert isinstance(value, str), "dependent_variable must be a string"
-            case "p_values":
-                assert isinstance(value, list), "p_values must be a list"
-
-    # def reset_params(self, restore_to_defaults=False):
-    #     """
-    #     Clear all of the user provided parameters
-    #     """
-    #     if restore_to_defaults:
-    #         self.params = ChainMap({}, {}, self.DEFAULT_TABLE_PARAMS)
-    #     else:
-    #         self.params.clear()
+        if name in BOOL_MODEL_TABLE_PARAMS:
+            assert isinstance(value, bool), f"{name} must be True or False"
+        elif name == "p_values":
+            assert isinstance(value, list), "p_values must be a list"
+            assert all(isinstance(p, float) for p in value), "p_values must be floats"
+        elif name == "dependent_variable":
+            assert isinstance(value, str), "dependent_variable must be a string"
+        elif name == "include_index":
+            raise AttributeError(
+                "include_index is not a valid parameter for ModelTable"
+            )
+        else:
+            super()._validate_param(name, value)
