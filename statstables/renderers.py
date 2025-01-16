@@ -14,24 +14,19 @@ class Renderer(ABC):
         pass
 
     @abstractmethod
-    def generate_header(self) -> str:
-        ...
+    def generate_header(self) -> str: ...
 
     @abstractmethod
-    def generate_body(self) -> str:
-        ...
+    def generate_body(self) -> str: ...
 
     @abstractmethod
-    def generate_footer(self) -> str:
-        ...
+    def generate_footer(self) -> str: ...
 
     @abstractmethod
-    def _create_line(self, line) -> str:
-        ...
+    def _create_line(self, line) -> str: ...
 
     @abstractmethod
-    def _format_value(self, formatting_dict: dict, **kwargs) -> str:
-        ...
+    def _format_value(self, formatting_dict: dict, **kwargs) -> str: ...
 
 
 class LatexRenderer(Renderer):
@@ -387,7 +382,7 @@ class HTMLRenderer(Renderer):
         # cell style section
         style = f' style="text-align:{alignment};'
         if formatting_dict["color"]:
-            style += f" color: #{formatting_dict['color']};"
+            style += f" color: {formatting_dict['color']};"
         # close out the attributes section of the code
         cell += style + '">'
         # create the actual value part of the code

@@ -23,10 +23,10 @@ class Table(ABC):
         self,
         *,
         caption_location: str | None = None,
-        sig_digits: int = 3,
-        thousands_sep: str = ",",
-        show_columns: bool = True,
-        include_index: bool = False,
+        sig_digits: int | None = None,
+        thousands_sep: str | None = None,
+        show_columns: bool | None = None,
+        include_index: bool | None = None,
         column_labels: dict | None = None,
         index_labels: dict | None = None,
         notes: list[tuple] | None = None,
@@ -715,11 +715,9 @@ class GenericTable(Table):
         self.columns = df.columns
         self.nrows = df.shape[0]
         super().__init__(**kwargs)
-        self.table_params["include_index"] = True
 
     def reset_params(self, restore_to_defaults=False):
         super().reset_params(restore_to_defaults)
-        self.table_params["include_index"] = True
 
     def reset_custom_features(self):
         super().reset_custom_features()
@@ -1087,6 +1085,7 @@ class ModelTable(Table):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
+        dependent_variable_name: str | None = None,
         **kwargs,
     ):
         """
@@ -1165,6 +1164,8 @@ class ModelTable(Table):
         # name by default.
         if all(var == dep_vars[0] for var in dep_vars):
             self.dependent_variable_name = dep_vars[0]
+            if dependent_variable_name is not None:
+                self.dependent_variable_name = dependent_variable_name
 
     def reset_custom_features(self):
         super().reset_custom_features()

@@ -36,7 +36,7 @@ DEFAULT_TABLE_PARAMS = {
     "caption_location": "top",
     "sig_digits": 3,
     "thousands_sep": ",",
-    "include_index": False,
+    "include_index": True,
     "show_columns": True,
 } | STParams
 
