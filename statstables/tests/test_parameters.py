@@ -35,6 +35,10 @@ def general_parameter_tests(table, table_type):
         table.table_params["column_alignment"] = 1
         table.table_params["column_alignment"] = "a"
 
+    with pytest.raises(AttributeError):
+        table.table_params["show_significance_levels"] = False
+        table.table_params["column_alment"] = "l"
+
     bool_properties = [
         "include_index",
         "show_columns",
@@ -105,6 +109,8 @@ def test_mean_differences_table_params(data):
     with pytest.raises(AttributeError):
         table.table_params["include_index"] = True
         table.table_params["include_index"] = False
+        table.table_params["show_significance_level"] = False
+        table.table_params["column_alment"] = "l"
 
 
 def test_model_table_params(data):
@@ -116,6 +122,8 @@ def test_model_table_params(data):
     with pytest.raises(AttributeError):
         mod_table.table_params["include_index"] = True
         mod_table.table_params["include_index"] = False
+        mod_table.table_params["show_significance_level"] = False
+        mod_table.table_params["column_alment"] = "l"
 
     bool_params = [
         "show_r2",
