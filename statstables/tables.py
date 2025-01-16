@@ -1,3 +1,4 @@
+import copy
 import pandas as pd
 import numpy as np
 import statstables as st
@@ -34,6 +35,7 @@ class Table(ABC):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
+        default_formatter: Callable | None = None,
         **kwargs,
     ):
         user_params = {
@@ -56,6 +58,9 @@ class Table(ABC):
         self.label = label
         self.caption = caption
         self.index_name = index_name
+        self.default_formatter = self._default_formatter
+        if default_formatter is not None:
+            self.default_formatter = default_formatter
         self.custom_formatters(formatters)
 
     def reset_params(self, restore_to_defaults=False) -> None:
@@ -613,6 +618,7 @@ class Table(ABC):
         _index: str | int | None,
         col: str | int | None,
         value: Union[int, float, str],
+        **kwargs,
     ) -> ChainMap:
         if (_index, col) in self._formatters.keys():
             formatter = self._formatters[(_index, col)]
@@ -621,8 +627,17 @@ class Table(ABC):
         elif col in self._formatters.keys():
             formatter = self._formatters.get(col, self._default_formatter)
         else:
-            formatter = self._default_formatter
-        formatted_value = formatter(value)
+            formatter = self.default_formatter
+        # for if the row is blank
+        if value == "":
+            return ChainMap({"value": ""}, DEFAULT_FORMATS)
+        # attempting to pass in the kwargs allows users to define formatter
+        # functions that take in additonal arguments. If their function doesn't,
+        # just pass in the value.
+        try:
+            formatted_value = formatter(value, **kwargs)
+        except TypeError:
+            formatted_value = formatter(value)
 
         if isinstance(formatted_value, str):
             return ChainMap({"value": formatted_value}, DEFAULT_FORMATS)
@@ -767,6 +782,8 @@ class MeanDifferenceTable(Table):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
+        default_formatter: Callable | None = None,
+        **kwargs,
     ):
         """
         Table that shows the difference in means between the specified groups in
@@ -848,6 +865,9 @@ class MeanDifferenceTable(Table):
         self.label = label
         self.caption = caption
         self.index_name = index_name
+        self.default_formatter = self._default_formatter
+        if default_formatter is not None:
+            self.default_formatter = default_formatter
         self.custom_formatters(formatters)
 
     def reset_params(self, restore_to_defaults=False):
@@ -980,20 +1000,33 @@ class MeanDifferenceTable(Table):
                 )
             ]
             for col, value in zip(row.index, row.values):
-                formatted_val = self._format_value(_index, col, value)
+                # pull standard error and p-value
+                try:
+                    se = self.sem.loc[_index, col]
+                except KeyError:
+                    se = None
+                try:
+                    pval = self.pvalues[f"{col}_{_index}"]
+                except KeyError:
+                    pval = None
+                formatted_val = self._format_value(
+                    _index, col, value, p_value=pval, se=se
+                )
                 if self.table_params["show_standard_errors"]:
                     try:
                         se = self.sem.loc[_index, col]
-                        formatted_se = self._format_value(_index, col, se)
-                        formatted_se["value"] = "(" + formatted_se["value"] + ")"
+                        formatted_se = copy.copy(formatted_val)
+                        # formatted_se = self._format_value(_index, col, se)
+                        formatted_se["value"] = (
+                            f"({se:.{self.table_params['sig_digits']}f})"
+                        )
                         sem_row.append(formatted_se)
                     except KeyError:
                         sem_row.append(self._format_value(_index, col, ""))
                 if self.table_params["show_stars"]:
                     try:
-                        pval = self.pvalues[f"{col}_{_index}"]
                         stars = pstars(pval, self.table_params["p_values"])
-                    except KeyError:
+                    except TypeError:
                         stars = ""
                     formatted_val["value"] = f"{formatted_val['value']}{stars}"
                 _row.append(formatted_val)
@@ -1085,6 +1118,7 @@ class ModelTable(Table):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
+        default_formatter: Callable | None = None,
         dependent_variable_name: str | None = None,
         **kwargs,
     ):
@@ -1159,6 +1193,9 @@ class ModelTable(Table):
         self.label = label
         self.caption = caption
         self.index_name = index_name
+        self.default_formatter = self._default_formatter
+        if default_formatter is not None:
+            self.default_formatter = default_formatter
         self.custom_formatters(formatters)
         # check whether all dep_vars are the same. If they are, display the variable
         # name by default.
@@ -1246,14 +1283,27 @@ class ModelTable(Table):
                     continue
                 param_val = mod.params[param]
                 pvalue = mod.pvalues[param]
+                row_val = self._format_value(
+                    param,
+                    i,
+                    param_val,
+                    p_value=pvalue,
+                    se=mod.sterrs[param],
+                    ci=(mod.cis_low[param], mod.cis_high[param]),
+                )
                 se = f"({mod.sterrs[param]:.{sig_digits}f})"
-                se_row.append(self._format_value(param, i, se))
+                # make formatting for the standard error the same as the parameter
+                se_dict = copy.copy(row_val)
+                se_dict["value"] = se
+                se_row.append(se_dict)
                 ci_low = f"{mod.cis_low[param]:.{sig_digits}f}"
                 ci_high = f"{mod.cis_high[param]:.{sig_digits}f}"
                 ci = f"({ci_low}, {ci_high})"
-                ci_row.append(self._format_value(param, i, ci))
+                ci_dict = copy.copy(row_val)
+                ci_dict["value"] = ci
+                ci_row.append(ci_dict)
                 stars = pstars(pvalue, self.table_params["p_values"])
-                row_val = self._format_value(param, i, param_val)
+                # update value to include significance stars and SE and CI if needed
                 row_val["value"] += (
                     stars * self.table_params["show_stars"]
                     + f" {se}"
@@ -1295,6 +1345,8 @@ class ModelTable(Table):
                 continue
             row = [self._format_value(f"{stat}_index", None, _name)]
             for i, mod in enumerate(self.models):
+                # try to get all of the model stats. will throw an error if the
+                # model doesn't have that attribute
                 try:
                     val = mod.get_formatted_value(stat, self.table_params["sig_digits"])
                     if pvalue and self.table_params["show_stars"]:
