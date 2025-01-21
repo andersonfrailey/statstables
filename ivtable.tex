@@ -1,4 +1,7 @@
-\begin{tabular}{cccc}
+% You must add \usepackage{booktabs} to your LaTex document for table to compile.
+% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble.
+
+\begin{tabular}{lccc}
   \toprule
   \toprule
   & \multicolumn{1}{c}{OLS} & \multicolumn{2}{c}{2SLS} \\
@@ -18,5 +21,5 @@
   F Statistic & 57.196*** & 89.258*** & 2.849* \\
   Model & OLS & OLS & IV-2SLS \\
   \bottomrule
-  \multicolumn{4}{r}{{\small \textit{*p$<$0.1, **p$<$0.05, ***p$<$0.01}}}\\
+  \multicolumn{4}{l}{{\small \textit{*p$<$0.1, **p$<$0.05, ***p$<$0.01}}}\\
 \end{tabular}

@@ -1,13 +1,16 @@
+import copy
 import pandas as pd
 import numpy as np
 import statstables as st
 from abc import ABC, abstractmethod
 from scipy import stats
 from typing import Union, Callable
-from collections import defaultdict
+from collections import defaultdict, ChainMap
 from pathlib import Path
 from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
-from .utils import pstars, validate_line_location
+from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS
+from .parameters import TableParams, MeanDiffsTableParams, ModelTableParams
+from .cellformatting import DEFAULT_FORMATS, validate_format_dict
 
 
 class Table(ABC):
@@ -17,59 +20,105 @@ class Table(ABC):
 
     VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
 
-    def __init__(self):
-        self.reset_params()
+    def __init__(
+        self,
+        *,
+        caption_location: str | None = None,
+        sig_digits: int | None = None,
+        thousands_sep: str | None = None,
+        show_columns: bool | None = None,
+        include_index: bool | None = None,
+        column_labels: dict | None = None,
+        index_labels: dict | None = None,
+        notes: list[tuple] | None = None,
+        label: str | None = None,
+        caption: str | None = None,
+        index_name: str = "",
+        formatters: dict | None = None,
+        default_formatter: Callable | None = None,
+        **kwargs,
+    ):
+        user_params = {
+            k: v
+            for k, v in {
+                "caption_location": caption_location,
+                "sig_digits": sig_digits,
+                "thousands_sep": thousands_sep,
+                "show_columns": show_columns,
+                "include_index": include_index,
+            }.items()
+            if v is not None
+        } | kwargs
 
-    def reset_params(self) -> None:
+        self.table_params = TableParams(user_params)
+        self.reset_custom_features()
+        self.rename_columns(column_labels)
+        self.rename_index(index_labels)
+        self.add_notes(notes)
+        self.label = label
+        self.caption = caption
+        self.index_name = index_name
+        self.default_formatter = self._default_formatter
+        if default_formatter is not None:
+            self.default_formatter = default_formatter
+        self.custom_formatters(formatters)
+
+    def reset_params(self, restore_to_defaults=False) -> None:
         """
         Resets all parameters to their default values
         """
-        self.caption_location = "top"
-        self.caption = None
-        self.label = None
-        self.sig_digits = 3
-        self.thousands_sep = ","
+        self.table_params.reset_params(restore_to_defaults)
+
+    def reset_custom_features(self):
+        self._multicolumns = []
         self._index_labels = dict()
         self._column_labels = dict()
-        self._multicolumns = []
-        # self._multiindex = []
-        self._formatters = dict()
         self.notes = []
+        self._formatters = dict()
         self.custom_lines = defaultdict(list)
         self.custom_tex_lines = defaultdict(list)
         self.custom_html_lines = defaultdict(list)
-        self.include_index = False
-        self.index_name = ""
-        self.show_columns = True
-        self.index_alignment = st.STParams["index_alignment"]
-        self.column_alignment = st.STParams["column_alignment"]
 
-    def rename_columns(self, columndict: dict) -> None:
+    def reset_all(self, restore_to_defaults=False):
+        self.reset_params(restore_to_defaults)
+        self.reset_custom_features()
+
+    def update_parameter(self, param, value):
         """
-        Rename the columns in the table. The keys of the columndict should be the
+        Helper method for updating a parameter
+        """
+        self.table_params[param] = value
+
+    def rename_columns(self, column_labels: dict | None) -> None:
+        """
+        Rename the columns in the table. The keys of the column_labels should be the
         current column labels and the values should be the new labels.
 
         Parameters
         ----------
-        columndict : dict
+        column_labels : dict
             _description_
         """
-        assert isinstance(columndict, dict), "columndict must be a dictionary"
-        self._column_labels.update(columndict)
+        if column_labels is None:
+            return None
+        assert isinstance(column_labels, dict), "column_labels must be a dictionary"
+        self._column_labels.update(column_labels)
 
-    def rename_index(self, indexdict: dict) -> None:
+    def rename_index(self, index_labels: dict | None) -> None:
         """
-        Rename the index labels in the table. The keys of the indexdict should
+        Rename the index labels in the table. The keys of the index_labels should
         be the current index labels and the values should be the new labels.
 
         Parameters
         ----------
-        indexdict : dict
+        index_labels : dict
             Dictionary where the keys are the current index labels and the values
             are the new labels.
         """
-        assert isinstance(indexdict, dict), "indexdict must be a dictionary"
-        self._index_labels.update(indexdict)
+        if index_labels is None:
+            return None
+        assert isinstance(index_labels, dict), "index_labels must be a dictionary"
+        self._index_labels.update(index_labels)
 
     # TODO: Add method for creating index labels that span multiple rows
     def add_multicolumns(
@@ -101,14 +150,32 @@ class Table(ABC):
         # TODO: Allow for placing the multicolumns below the table body
         if not spans:
             spans = [self.ncolumns]
-        assert len(columns) == len(spans), "A span must be provided for each column"
+        assert len(columns) == len(
+            spans
+        ), "A column label must be provided for each column in the table"
         assert (
             sum(spans) == self.ncolumns
         ), f"The sum of spans must equal the number of columns. There are {self.ncolumns} columns, but spans sum to {sum(spans)}"
         _position = len(self._multicolumns) if position is None else position
         self._multicolumns.insert(_position, (columns, spans, underline))
 
-    def remove_multicolumn(self, column=None, index=None) -> None:
+    def remove_multicolumn(self, column=None, index=None, all=False) -> None:
+        """
+        Remove a multicolumn from the table. The column can be specified using
+        either the column itself or its index in the multicolumns list.
+
+        Parameters
+        ----------
+        column : str, optional
+            The column to remove, by default None
+        index : int, optional
+            The index of the column to remove, by default None
+        all : bool, optional
+            If true, remove all multicolumn previously provided
+        """
+        if all:
+            self._multicolumns.clear()
+            return None
         if column is None and index is None:
             raise ValueError("Either 'column' or 'index' must be provided")
         if column is not None:
@@ -135,7 +202,7 @@ class Table(ABC):
     #     for i, s in zip(index, spans):
     #         self._multiindex[s[0]] = {"index": i, "end": s[1]}
 
-    def custom_formatters(self, formatters: dict) -> None:
+    def custom_formatters(self, formatters: dict | None) -> None:
         """
         Method to set custom formatters either along the columns or index. Each
         key in the formatters dict must be a function that returns a string.
@@ -157,6 +224,8 @@ class Table(ABC):
         ValueError
             Error is raised if the values in the formatters dict are not functions
         """
+        if formatters is None:
+            return None
         assert all(
             callable(f) for f in formatters.values()
         ), "Values in the formatters dict must be functions"
@@ -189,16 +258,23 @@ class Table(ABC):
         _position = len(self.notes) if position is None else position
         self.notes.insert(_position, (note, alignment, escape))
 
-    def add_notes(self, notes: list[tuple]) -> None:
+    def add_notes(self, notes: list[tuple] | None) -> None:
         """
         Adds multiple notes to the table. Each element of notes should be a tuple
         where the first element is the text of the note, the second is the alignment
         parameter and the third is the escape parameter.
         """
-        for note in notes:
-            self.add_note(note=note[0], alignment=note[1], escape=note[2])
+        if notes is None:
+            return None
+        for i, note in enumerate(notes):
+            try:
+                self.add_note(note=note[0], alignment=note[1], escape=note[2])
+            except Exception as e:
+                raise ValueError(f"Note {i} yields error {e}")
 
-    def remove_note(self, note: str | None = None, index: int | None = None) -> None:
+    def remove_note(
+        self, note: str | None = None, index: int | None = None, all: bool = False
+    ) -> None:
         """
         Removes a note that has been added to the table. To specify which note,
         either pass the text of the note as the 'note' parameter or the index of
@@ -210,12 +286,17 @@ class Table(ABC):
             Text of note to remove, by default None
         index : int, optional
             Index of the note to be removed, by default None
+        all : bool, optional
+            If true, remove all notes from the table
 
         Raises
         ------
         ValueError
             Raises and error if neither 'note' or 'index' are provided
         """
+        if all:
+            self.notes.clear()
+            return None
         if note is None and index is None:
             raise ValueError("Either 'note' or 'index' must be provided")
         if note is not None:
@@ -262,7 +343,11 @@ class Table(ABC):
         )
 
     def remove_line(
-        self, location: str, line: list | None = None, index: int | None = None
+        self,
+        location: str | None = None,
+        line: list | None = None,
+        index: int | None = None,
+        all: bool = False,
     ) -> None:
         """
         Remove a custom line. To specify which line to remove, either pass the list
@@ -271,12 +356,17 @@ class Table(ABC):
 
         Parameters
         ----------
-        location : str
-            Where in the table the line is located
+        location : str | None
+            Where in the table the line is located. If not provided and `all`
+            is true, all lines in every location will be removed.
         line : list, optional
             List containing the line elements, by default None
         index : int, optional
             Index of the line in the custom line list for the specified location, by default None
+        all : bool, optional
+            Remove all custom lines. If true and `location` = None, all custom
+            lines in every position will be removed. Otherwise only the lines
+            in the provided location are removed.
 
         Raises
         ------
@@ -284,10 +374,19 @@ class Table(ABC):
             Raises an error if neither 'line' or 'index' are provided, or if the
             line cannot be found in the custom lines list.
         """
+        if location is None and all:
+            for loc in VALID_LINE_LOCATIONS:
+                self.custom_lines[loc].clear()
+            return None
+        if location is None and not all:
+            raise ValueError("Either a location must be provided or all must be true")
         validate_line_location(location)
         if line is None and index is None:
             raise ValueError("Either 'line' or 'index' must be provided")
 
+        if all:
+            self.custom_lines[location].clear()
+            return None
         if line is not None:
             self.custom_lines[location].remove(line)
         elif index is not None:
@@ -312,7 +411,11 @@ class Table(ABC):
         self.custom_tex_lines[location].append(line)
 
     def remove_latex_line(
-        self, location: str, line: str | None = None, index: int | None = None
+        self,
+        location: str | None = None,
+        line: str | None = None,
+        index: int | None = None,
+        all: bool = False,
     ) -> None:
         """
         Remove a custom LaTex line. To specify which line to remove, either pass the list
@@ -327,6 +430,10 @@ class Table(ABC):
             List containing the line elements.
         index : int, optional
             Index of the line in the custom line list for the specified location.
+        all : bool, optional
+            Remove all custom LaTex lines. If true and `location` = None, all custom
+            lines in every position will be removed. Otherwise only the lines
+            in the provided location are removed.
 
         Raises
         ------
@@ -334,6 +441,12 @@ class Table(ABC):
             Raises an error if neither 'line' or 'index' are provided, or if the
             line cannot be found in the custom lines list.
         """
+        if location is None and all:
+            for loc in VALID_LINE_LOCATIONS:
+                self.custom_tex_lines[loc].clear()
+            return None
+        if location is None and not all:
+            raise ValueError("Either a location must be provided or all must be true")
         validate_line_location(location)
         if line is None and index is None:
             raise ValueError("Either 'line' or 'index' must be provided")
@@ -364,8 +477,42 @@ class Table(ABC):
         self.custom_html_lines[location].append(line)
 
     def remove_html_line(
-        self, location: str, line: str | None = None, index: int | None = None
+        self,
+        location: str | None = None,
+        line: str | None = None,
+        index: int | None = None,
+        all: bool = False,
     ):
+        """
+        Remove a custom HTML line. To specify which line to remove, either pass the list
+        containing the line as the 'line' parameter or the index of the line as the
+        'index' parameter.
+
+        Parameters
+        ----------
+        location : str
+            Where in the table the line is located.
+        line : list, optional
+            List containing the line elements.
+        index : int, optional
+            Index of the line in the custom line list for the specified location.
+        all : bool, optional
+            Remove all custom LaTex lines. If true and `location` = None, all custom
+            lines in every position will be removed. Otherwise only the lines
+            in the provided location are removed.
+
+        Raises
+        ------
+        ValueError
+            Raises an error if neither 'line' or 'index' are provided, or if the
+            line cannot be found in the custom lines list.
+        """
+        if location is None and all:
+            for loc in VALID_LINE_LOCATIONS:
+                self.custom_html_lines[loc].clear()
+            return None
+        if location is None and not all:
+            raise ValueError("Either a location must be provided or all must be true")
         validate_line_location(location)
         if line is None and index is None:
             raise ValueError("Either 'line' or 'index' must be provided")
@@ -376,8 +523,12 @@ class Table(ABC):
             self.custom_html_lines[location].pop(index)
 
     def render_latex(
-        self, outfile: Union[str, Path, None] = None, only_tabular=False
-    ) -> Union[str, None]:
+        self,
+        outfile: Union[str, Path, None] = None,
+        only_tabular=False,
+        *args,
+        **kwargs,
+    ) -> str | None:
         """
         Render the table in LaTeX. Note that you will need to include the booktabs
         package in your LaTeX document. If no outfile is provided, the LaTeX
@@ -402,12 +553,17 @@ class Table(ABC):
         tex_str = LatexRenderer(self).render(only_tabular=only_tabular)
         if not outfile:
             return tex_str
+        preamble = r"% You must add \usepackage{booktabs} to your LaTex document for table to compile."
+        preamble += "\n"
+        preamble += r"% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble."
+        preamble += "\n\n"
+        tex_str = preamble + tex_str
         Path(outfile).write_text(tex_str)
         return None
 
     def render_html(
-        self, outfile: Union[str, Path, None] = None, table_class=""
-    ) -> Union[str, None]:
+        self, outfile: Union[str, Path, None] = None, table_class="", *args, **kwargs
+    ) -> str | None:
         """
         Render the table in HTML. Note that you will need to include the booktabs
         package in your LaTeX document. If no outfile is provided, the LaTeX
@@ -446,16 +602,24 @@ class Table(ABC):
     def _repr_html_(self):
         return self.render_html()
 
-    def _default_formatter(self, value: Union[int, float, str]) -> str:
+    def _default_formatter(self, value: Union[int, float, str], **kwargs) -> str:
+        thousands_sep = self.table_params["thousands_sep"]
+        sig_digits = self.table_params["sig_digits"]
         if isinstance(value, (int, float)):
-            return f"{value:{self.thousands_sep}.{self.sig_digits}f}"
+            return f"{value:{thousands_sep}.{sig_digits}f}"
         elif isinstance(value, int):
-            return f"{value:{self.thousands_sep}}"
+            return f"{value:{thousands_sep}}"
         elif isinstance(value, str):
             return value
         return value
 
-    def _format_value(self, _index: str, col: str, value: Union[int, float, str]):
+    def _format_value(
+        self,
+        _index: str | int | None,
+        col: str | int | None,
+        value: Union[int, float, str],
+        **kwargs,
+    ) -> ChainMap:
         if (_index, col) in self._formatters.keys():
             formatter = self._formatters[(_index, col)]
         elif _index in self._formatters.keys():
@@ -463,16 +627,35 @@ class Table(ABC):
         elif col in self._formatters.keys():
             formatter = self._formatters.get(col, self._default_formatter)
         else:
-            formatter = self._default_formatter
-        return formatter(value)
+            formatter = self.default_formatter
+        # for if the row is blank
+        if value == "":
+            return ChainMap({"value": ""}, DEFAULT_FORMATS)
+        # attempting to pass in the kwargs allows users to define formatter
+        # functions that take in additonal arguments. If their function doesn't,
+        # just pass in the value.
+        try:
+            formatted_value = formatter(value, **kwargs)
+        except TypeError:
+            formatted_value = formatter(value)
+
+        if isinstance(formatted_value, str):
+            return ChainMap({"value": formatted_value}, DEFAULT_FORMATS)
+        elif isinstance(formatted_value, dict):
+            validate_format_dict(formatted_value)
+            return ChainMap(formatted_value, DEFAULT_FORMATS)
+        else:
+            raise ValueError("Formatter must return a dictionary or string")
 
     @abstractmethod
-    def _create_rows(self) -> list[list[str]]:
+    def _create_rows(self) -> list[list[ChainMap]]:
         """
         This method should return a list of lists, where each inner list is a
         row in the body of the table. Each element of those inner lists should
         be one cell in the table.
         """
+        # TODO: Make it return a list of dictionaries instead of strings.
+        # Dictionaries will contain information on formatting (bold, italic, color, etc.)
         pass
 
     @staticmethod
@@ -495,15 +678,7 @@ class Table(ABC):
         """
         Location of the caption in the table. Can be either 'top' or 'bottom'.
         """
-        return self._caption_location
-
-    @caption_location.setter
-    def caption_location(self, location: str) -> None:
-        assert location in [
-            "top",
-            "bottom",
-        ], "caption_location must be 'top' or 'bottom'"
-        self._caption_location = location
+        return self.table_params["caption_location"]
 
     @property
     def caption(self) -> str | None:
@@ -531,42 +706,6 @@ class Table(ABC):
         self._label = label
 
     @property
-    def sig_digits(self) -> int:
-        """
-        Number of significant digits to include in the table
-        """
-        return self._sig_digits
-
-    @sig_digits.setter
-    def sig_digits(self, digits: int) -> None:
-        assert isinstance(digits, int), "sig_digits must be an integer"
-        self._sig_digits = digits
-
-    @property
-    def thousands_sep(self) -> str:
-        """
-        Character to use as the thousands separator in the table
-        """
-        return self._thousands_sep
-
-    @thousands_sep.setter
-    def thousands_sep(self, sep: str) -> None:
-        assert isinstance(sep, str), "thousands_sep must be a string"
-        self._thousands_sep = sep
-
-    @property
-    def include_index(self) -> bool:
-        """
-        Whether or not to include the index in the table
-        """
-        return self._include_index
-
-    @include_index.setter
-    def include_index(self, include: bool) -> None:
-        assert isinstance(include, bool), "include_index must be True or False"
-        self._include_index = include
-
-    @property
     def index_name(self) -> str:
         """
         Name of the index column in the table
@@ -578,46 +717,6 @@ class Table(ABC):
         assert isinstance(name, str), "index_name must be a string"
         self._index_name = name
 
-    @property
-    def show_columns(self) -> bool:
-        """
-        Whether or not to show the column labels in the table
-        """
-        return self._show_columns
-
-    @show_columns.setter
-    def show_columns(self, show: bool) -> None:
-        assert isinstance(show, bool), "show_columns must be True or False"
-        self._show_columns = show
-
-    @property
-    def index_alignment(self) -> str:
-        """
-        Alignment of the index column in the table
-        """
-        return self._index_alignment
-
-    @index_alignment.setter
-    def index_alignment(self, alignment: str) -> None:
-        assert (
-            alignment in self.VALID_ALIGNMENTS
-        ), f"index_alignment must be in {self.VALID_ALIGNMENTS}"
-        self._index_alignment = alignment
-
-    @property
-    def column_alignment(self) -> str:
-        """
-        Alignment of the column labels in the table
-        """
-        return self._column_alignment
-
-    @column_alignment.setter
-    def column_alignment(self, alignment: str) -> None:
-        assert (
-            alignment in self.VALID_ALIGNMENTS
-        ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
-        self._column_alignment = alignment
-
 
 class GenericTable(Table):
     """
@@ -625,25 +724,32 @@ class GenericTable(Table):
     column/index naming
     """
 
-    def __init__(self, df: pd.DataFrame | pd.Series):
+    def __init__(self, df: pd.DataFrame | pd.Series, **kwargs):
         self.df = df
         self.ncolumns = df.shape[1]
         self.columns = df.columns
         self.nrows = df.shape[0]
-        self.reset_params()
+        super().__init__(**kwargs)
 
-    def reset_params(self):
-        super().reset_params()
-        self.include_index = True
+    def reset_params(self, restore_to_defaults=False):
+        super().reset_params(restore_to_defaults)
+
+    def reset_custom_features(self):
+        super().reset_custom_features()
 
     def _create_rows(self):
         rows = []
         for _index, row in self.df.iterrows():
-            _row = [self._index_labels.get(_index, _index)]
+            _row = [
+                self._format_value(
+                    f"{_index}_label", "_index", self._index_labels.get(_index, _index)
+                )
+            ]
             for col, value in zip(row.index, row.values):
                 formated_val = self._format_value(_index, col, value)
+                # TODO: return a dictionary with all of the formatting options
                 _row.append(formated_val)
-            if not self.include_index:
+            if not self.table_params["include_index"]:
                 _row.pop(0)
             # if _index in self._multiindex.keys():
             #     _row.insert(0, self._multiindex[_index]["index"])
@@ -659,6 +765,25 @@ class MeanDifferenceTable(Table):
         group_var: str,
         diff_pairs: list[tuple] | None = None,
         alternative: str = "two-sided",
+        *,
+        caption_location: str | None = None,
+        sig_digits: int = 3,
+        thousands_sep: str = ",",
+        show_columns: bool = True,
+        show_n: bool | None = None,
+        show_standard_errors: bool | None = None,
+        p_values: list | None = None,
+        show_stars: bool | None = None,
+        show_significance_levels: bool | None = None,
+        column_labels: dict | None = None,
+        index_labels: dict | None = None,
+        notes: list[tuple] | None = None,
+        label: str | None = None,
+        caption: str | None = None,
+        index_name: str = "",
+        formatters: dict | None = None,
+        default_formatter: Callable | None = None,
+        **kwargs,
     ):
         """
         Table that shows the difference in means between the specified groups in
@@ -683,6 +808,22 @@ class MeanDifferenceTable(Table):
             by default, but can be set to 'greater' or 'less' for a one-sided test.
             For now, the same test is applied to each variable.
         """
+        user_params = {
+            k: v
+            for k, v in {
+                "caption_location": caption_location,
+                "sig_digits": sig_digits,
+                "thousands_sep": thousands_sep,
+                "show_columns": show_columns,
+                "show_n": show_n,
+                "show_standard_errors": show_standard_errors,
+                "p_values": p_values,
+                "show_stars": show_stars,
+                "show_significance_levels": show_significance_levels,
+            }.items()
+            if v is not None
+        }
+        self.table_params = MeanDiffsTableParams(user_params)
         # TODO: allow for grouping on multiple variables
         self.groups = df[group_var].unique()
         self.ngroups = len(self.groups)
@@ -717,23 +858,55 @@ class MeanDifferenceTable(Table):
         self._get_diffs()
         self.ncolumns = self.means.shape[1]
         self.columns = self.means.columns
-        diff_word = "Differences" if len(var_list) > 1 else "Difference"
+        self.reset_custom_features()
+        self.rename_columns(column_labels)
+        self.rename_index(index_labels)
+        self.add_notes(notes)
+        self.label = label
+        self.caption = caption
+        self.index_name = index_name
+        self.default_formatter = self._default_formatter
+        if default_formatter is not None:
+            self.default_formatter = default_formatter
+        self.custom_formatters(formatters)
+
+    def reset_params(self, restore_to_defaults=False):
+        super().reset_params(restore_to_defaults)
+
+    def reset_param(self, param: str, to_default: bool = False) -> None:
+        """
+        Reset a single parameter to its default value. If `to_default` is True,
+        resets back to the built in default value. If it is false, it resets to
+        whatever the user has set as the default value when initializing the table
+
+        Parameters
+        ----------
+        param : str
+            The parameter to reset
+        to_default : bool, optional
+            If True, resets to the built in default value. If False, resets to the
+            user specified default value, by default False
+
+        Returns
+        -------
+        None
+        """
+        self.table_params[0].pop(param)
+        # if to default, remove parameter from user provided defaults
+        if to_default:
+            self.table_params[1].pop(param)
+
+    def reset_custom_features(self):
+        super().reset_custom_features()
+        diff_word = "Differences" if len(self.var_list) > 1 else "Difference"
         self.add_multicolumns(
             ["Means", "", diff_word], [self.ngroups, 1, self.ndiffs]
         )  # may need to move this later if we make including the total mean optional
 
-    def reset_params(self):
-        super().reset_params()
-        self.show_n = True
-        self.show_standard_errors = True
-        self.p_values = [0.1, 0.05, 0.01]
-        self.include_index = True
-        self.show_stars = True
-
     @staticmethod
     def _render(render_func):
         def wrapper(self, **kwargs):
-            if self.show_n:
+            if self.table_params["show_n"]:
                 self.add_line(
                     [
                         f"N={self.grp_sizes[c]:,}" if c in self.grp_sizes.index else ""
@@ -741,7 +914,7 @@ class MeanDifferenceTable(Table):
                     ],
                     location="after-columns",
                 )
-            if self.show_stars:
+            if self.table_params["show_significance_levels"]:
                 _p = "p<"
                 if render_func.__name__ == "render_latex":
                     _p = "p$<$"
@@ -749,7 +922,7 @@ class MeanDifferenceTable(Table):
                     [
                         f"{'*' * i} {_p} {p}"
                         for i, p in enumerate(
-                            sorted(self.p_values, reverse=True), start=1
+                            sorted(self.table_params["p_values"], reverse=True), start=1
                         )
                     ]
                 )
@@ -757,9 +930,9 @@ class MeanDifferenceTable(Table):
                 self.add_note(note, alignment="l", escape=False)
             output = render_func(self, **kwargs)
             # remove all the supurflous lines that may not be needed in future renders
-            if self.show_n:
+            if self.table_params["show_n"]:
                 self.remove_line(location="after-columns", index=-1)
-            if self.show_stars:
+            if self.table_params["show_significance_levels"]:
                 self.remove_note(index=-1)
                 print("Note: Standard errors assume samples are drawn independently.")
             return output
@@ -767,11 +940,11 @@ class MeanDifferenceTable(Table):
         return wrapper
 
     @_render
-    def render_latex(self, outfile=None, only_tabular=False) -> Union[str, None]:
+    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
         return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, outfile=None) -> Union[str, None]:
+    def render_html(self, outfile=None) -> str | None:
         return super().render_html(outfile)
 
     @_render
@@ -820,67 +993,57 @@ class MeanDifferenceTable(Table):
     def _create_rows(self):
         rows = []
         for _index, row in self.means.iterrows():
-            sem_row = [""]
-            _row = [self._index_labels.get(_index, _index)]
+            sem_row = [self._format_value(f"{_index}_label", "_index", "")]
+            _row = [
+                self._format_value(
+                    f"{_index}_label", "_index", self._index_labels.get(_index, _index)
+                )
+            ]
             for col, value in zip(row.index, row.values):
-                formatted_val = self._format_value(_index, col, value)
-                if self.show_standard_errors:
+                # pull standard error and p-value
+                try:
+                    se = self.sem.loc[_index, col]
+                except KeyError:
+                    se = None
+                try:
+                    pval = self.pvalues[f"{col}_{_index}"]
+                except KeyError:
+                    pval = None
+                formatted_val = self._format_value(
+                    _index, col, value, p_value=pval, se=se
+                )
+                if self.table_params["show_standard_errors"]:
                     try:
                         se = self.sem.loc[_index, col]
-                        formatted_se = self._format_value(_index, col, se)
-                        sem_row.append(f"({formatted_se})")
+                        formatted_se = copy.copy(formatted_val)
+                        # formatted_se = self._format_value(_index, col, se)
+                        formatted_se["value"] = (
+                            f"({se:.{self.table_params['sig_digits']}f})"
+                        )
+                        sem_row.append(formatted_se)
                     except KeyError:
-                        sem_row.append("")
-                if self.show_stars:
+                        sem_row.append(self._format_value(_index, col, ""))
+                if self.table_params["show_stars"]:
                     try:
-                        pval = self.pvalues[f"{col}_{_index}"]
-                        stars = pstars(pval, self.p_values)
-                    except KeyError:
+                        stars = pstars(pval, self.table_params["p_values"])
+                    except TypeError:
                         stars = ""
-                    formatted_val = f"{formatted_val}{stars}"
+                    formatted_val["value"] = f"{formatted_val['value']}{stars}"
                 _row.append(formatted_val)
             rows.append(_row)
-            if self.show_standard_errors:
+            if self.table_params["show_standard_errors"]:
                 rows.append(sem_row)
         return rows
 
-    ##### Properties #####
-
-    @property
-    def show_n(self) -> bool:
-        return self._show_n
-
-    @show_n.setter
-    def show_n(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_n = value
-
-    @property
-    def show_standard_errors(self) -> bool:
-        return self._show_standard_errors
-
-    @show_standard_errors.setter
-    def show_standard_errors(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_standard_errors = value
-
-    @property
-    def show_stars(self) -> bool:
-        return self._show_stars
-
-    @show_stars.setter
-    def show_stars(self, value: bool) -> None:
-        self._validate_input_type(value, bool)
-        self._show_stars = value
-
 
 class SummaryTable(GenericTable):
-    def __init__(self, df: pd.DataFrame, var_list: list[str]):
+    def __init__(self, df: pd.DataFrame, var_list: list[str], **kwargs):
         summary_df = df[var_list].describe()
-        super().__init__(summary_df)
+        super().__init__(summary_df, **kwargs)
+        self.reset_custom_features()
 
-    def reset_params(self) -> None:
-        super().reset_params()
+    def reset_custom_features(self):
+        super().reset_custom_features()
         self.rename_index(
             {
                 "count": "Count",
@@ -890,6 +1053,7 @@ class SummaryTable(GenericTable):
                 "max": "Max.",
             }
         )
+        self.custom_formatters({"count": lambda x: int(x)})
 
 
 class ModelTable(Table):
@@ -922,7 +1086,42 @@ class ModelTable(Table):
         ("model_type", "Model", False),
     ]
 
-    def __init__(self, models: list):
+    def __init__(
+        self,
+        models: list,
+        *,
+        caption_location: str | None = None,
+        sig_digits: int = 3,
+        thousands_sep: str = ",",
+        show_columns: bool = True,
+        show_r2: bool | None = None,
+        show_adjusted_r2: bool | None = None,
+        show_pseudo_r2: bool | None = None,
+        show_dof: bool | None = None,
+        show_ses: bool | None = None,
+        show_cis: bool | None = None,
+        show_fstat: bool | None = None,
+        single_row: bool | None = None,
+        show_observations: bool | None = None,
+        show_ngroups: bool | None = None,
+        show_model_numbers: bool | None = None,
+        p_values: list | None = None,
+        show_stars: bool | None = None,
+        show_model_type: bool | None = None,
+        show_significance_levels: bool | None = None,
+        column_labels: dict | None = None,
+        index_labels: dict | None = None,
+        covariate_labels: dict | None = None,
+        covariate_order: list | None = None,
+        notes: list[tuple] | None = None,
+        label: str | None = None,
+        caption: str | None = None,
+        index_name: str = "",
+        formatters: dict | None = None,
+        default_formatter: Callable | None = None,
+        dependent_variable_name: str | None = None,
+        **kwargs,
+    ):
         """
         Initialize an instance of the ModelsTable class.
 
@@ -940,10 +1139,36 @@ class ModelTable(Table):
             Raised if a model is not supported. To use custom models, add them to the
             `st.SupportedModels` dictionary.
         """
+        user_params = {
+            k: v
+            for k, v in {
+                "caption_location": caption_location,
+                "sig_digits": sig_digits,
+                "thousands_sep": thousands_sep,
+                "show_columns": show_columns,
+                "show_r2": show_r2,
+                "show_adjusted_r2": show_adjusted_r2,
+                "show_pseudo_r2": show_pseudo_r2,
+                "show_dof": show_dof,
+                "show_ses": show_ses,
+                "show_cis": show_cis,
+                "show_fstat": show_fstat,
+                "single_row": single_row,
+                "show_observations": show_observations,
+                "show_ngroups": show_ngroups,
+                "show_model_numbers": show_model_numbers,
+                "p_values": p_values,
+                "show_stars": show_stars,
+                "show_model_type": show_model_type,
+                "show_significance_levels": show_significance_levels,
+            }.items()
+            if v is not None
+        } | kwargs
         self.models = []
         self.params = set()
         self.ncolumns = len(models)
         dep_vars = []
+        # pull the parameters from each model
         for mod in models:
             try:
                 mod_obj = st.SupportedModels[type(mod)](mod)
@@ -958,36 +1183,44 @@ class ModelTable(Table):
             dep_vars.append(mod_obj.dependent_variable)
 
         self.all_param_labels = sorted(self.params)
-        self.reset_params()
+        self.table_params = ModelTableParams(user_params)
+        self.reset_custom_features()
+        self.rename_columns(column_labels)
+        self.rename_covariates(index_labels)
+        self.rename_covariates(covariate_labels)
+        self.covariate_order(covariate_order)
+        self.add_notes(notes)
+        self.label = label
+        self.caption = caption
+        self.index_name = index_name
+        self.default_formatter = self._default_formatter
+        if default_formatter is not None:
+            self.default_formatter = default_formatter
+        self.custom_formatters(formatters)
         # check whether all dep_vars are the same. If they are, display the variable
         # name by default.
         if all(var == dep_vars[0] for var in dep_vars):
             self.dependent_variable_name = dep_vars[0]
+            if dependent_variable_name is not None:
+                self.dependent_variable_name = dependent_variable_name
 
-    def reset_params(self):
-        super().reset_params()
-        self.show_r2 = True
-        self.show_adjusted_r2 = False
-        self.show_pseudo_r2 = True
-        self.show_dof = False
-        self.show_ses = True
-        self.show_cis = False
-        self.show_fstat = True
-        self.single_row = False
-        self.show_observations = True
-        self.show_ngroups = True
-        self.show_model_numbers = True
+    def reset_custom_features(self):
+        super().reset_custom_features()
+        self.dependent_variable = ""
         self._model_nums = [f"({i})" for i in range(1, len(self.models) + 1)]
         self.columns = self._model_nums
         self.param_labels = self.all_param_labels
+        self.custom_formatters(
+            {
+                "r2_index": self._stats_index_formatter,
+                "pseudo_r2_index": self._stats_index_formatter,
+            }
+        )
 
-        self.p_values = [0.1, 0.05, 0.01]
-        self.show_stars = True
-        self.show_model_type = True
-        self.dependent_variable = ""
-        self.include_index = True
+    def _stats_index_formatter(self, stat_name: str) -> dict:
+        return {"value": stat_name, "escape": False}
 
-    def rename_covariates(self, names: dict) -> None:
+    def rename_covariates(self, names: dict | None) -> None:
         """
         Dictionary renaming the covariate labels in the table. The format should be:
         {parameter_name: desired_label}. If a covariate is not in the dictionary,
@@ -998,9 +1231,17 @@ class ModelTable(Table):
         names : dict
             Dictionary containing the new names for the covariates
         """
+        if names is None:
+            return None
         self._index_labels = names
 
-    def parameter_order(self, order: list) -> None:
+    def covariate_order(self, order: list | None) -> None:
+        """
+        Set order of covariates in the table. Wraps the `parameter_order` method
+        """
+        self.parameter_order(order)
+
+    def parameter_order(self, order: list | None) -> None:
         """
         Set the order of the parameters in the table. An error will be raised if
         the parameter is not in any of the models.
@@ -1010,6 +1251,8 @@ class ModelTable(Table):
         order : list
             List of the parameters in the order you want them to appear in the table.
         """
+        if order is None:
+            return None
         assert isinstance(order, list), "`order` must be a list"
         missing = ""
         for p in order:
@@ -1023,37 +1266,59 @@ class ModelTable(Table):
 
     def _create_rows(self):
         rows = []
+        sig_digits = self.table_params["sig_digits"]
         for param in self.param_labels:
-            row = [self._index_labels.get(param, param)]
-            se_row = [""]
-            ci_row = [""]
+            row = [
+                self._format_value(
+                    f"{param}_label", "index", self._index_labels.get(param, param)
+                )
+            ]
+            se_row = [self._format_value(f"{param}_label", "se", "")]
+            ci_row = [self._format_value(f"{param}_label", "ci", "")]
             for i, mod in enumerate(self.models):
                 if param not in mod.param_labels:
-                    row.append("")
-                    se_row.append("")
-                    ci_row.append("")
+                    row.append(self._format_value(param, i, ""))
+                    se_row.append(self._format_value(param, i, ""))
+                    ci_row.append(self._format_value(param, i, ""))
                     continue
                 param_val = mod.params[param]
                 pvalue = mod.pvalues[param]
-                se = f"({mod.sterrs[param]:.{self.sig_digits}f})"
-                se_row.append(se)
-                ci_low = f"{mod.cis_low[param]:.{self.sig_digits}f}"
-                ci_high = f"{mod.cis_high[param]:.{self.sig_digits}f}"
+                row_val = self._format_value(
+                    param,
+                    i,
+                    param_val,
+                    p_value=pvalue,
+                    se=mod.sterrs[param],
+                    ci=(mod.cis_low[param], mod.cis_high[param]),
+                )
+                se = f"({mod.sterrs[param]:.{sig_digits}f})"
+                # make formatting for the standard error the same as the parameter
+                se_dict = copy.copy(row_val)
+                se_dict["value"] = se
+                se_row.append(se_dict)
+                ci_low = f"{mod.cis_low[param]:.{sig_digits}f}"
+                ci_high = f"{mod.cis_high[param]:.{sig_digits}f}"
                 ci = f"({ci_low}, {ci_high})"
-                ci_row.append(ci)
-                stars = pstars(pvalue, self.p_values)
-                row_val = (
-                    f"{self._format_value(param, i, param_val)}"
-                    + stars * self.show_stars
-                    + f" {se}" * self.single_row * self.show_ses
-                    + f" {ci}" * self.single_row * self.show_cis
+                ci_dict = copy.copy(row_val)
+                ci_dict["value"] = ci
+                ci_row.append(ci_dict)
+                stars = pstars(pvalue, self.table_params["p_values"])
+                # update value to include significance stars and SE and CI if needed
+                row_val["value"] += (
+                    stars * self.table_params["show_stars"]
+                    + f" {se}"
+                    * self.table_params["single_row"]
+                    * self.table_params["show_ses"]
+                    + f" {ci}"
+                    * self.table_params["single_row"]
+                    * self.table_params["show_cis"]
                 )
 
                 row.append(row_val)
             rows.append(row)
-            if self.show_ses and not self.single_row:
+            if self.table_params["show_ses"] and not self.table_params["single_row"]:
                 rows.append(se_row)
-            if self.show_cis and not self.single_row:
+            if self.table_params["show_cis"] and not self.table_params["single_row"]:
                 rows.append(ci_row)
         return rows
 
@@ -1076,20 +1341,25 @@ class ModelTable(Table):
             _name = name
             if isinstance(name, dict):
                 _name = name[renderer]
-            if not getattr(self, f"show_{stat}"):
+            if not getattr(self.table_params, f"show_{stat}"):
                 continue
-            row = [_name]
-            for mod in self.models:
+            row = [self._format_value(f"{stat}_index", None, _name)]
+            for i, mod in enumerate(self.models):
+                # try to get all of the model stats. will throw an error if the
+                # model doesn't have that attribute
                 try:
-                    val = mod.get_formatted_value(stat, self.sig_digits)
-                    if pvalue and self.show_stars:
-                        stars = pstars(getattr(mod, f"{stat}_pvalue"), self.p_values)
+                    val = mod.get_formatted_value(stat, self.table_params["sig_digits"])
+                    if pvalue and self.table_params["show_stars"]:
+                        stars = pstars(
+                            getattr(mod, f"{stat}_pvalue"),
+                            self.table_params["p_values"],
+                        )
                         val = f"{val}{stars}"
-                    row.append(val)
                 except AttributeError:
-                    row.append("")
+                    val = ""
+                row.append(self._format_value(stat, i, val))
             # only add the stat if at least one model has it
-            if not all(r == "" for r in row[1:]):
+            if not all(r["value"] == "" for r in row[1:]):
                 rows.append(row)
         return rows
 
@@ -1106,7 +1376,7 @@ class ModelTable(Table):
         """
 
         def wrapper(self, **kwargs):
-            if self.show_stars:
+            if self.table_params["show_significance_levels"]:
                 _p = "p<"
                 if render_func.__name__ == "render_latex":
                     _p = "p$<$"
@@ -1114,15 +1384,15 @@ class ModelTable(Table):
                     [
                         f"{'*' * i}{_p}{p}"
                         for i, p in enumerate(
-                            sorted(self.p_values, reverse=True), start=1
+                            sorted(self.table_params["p_values"], reverse=True), start=1
                         )
                     ]
                 )
                 stars_note = f"{stars}"
-                self.add_note(stars_note, alignment="r", escape=False, position=0)
-                _stars_note = (stars_note, "r", False)
+                self.add_note(stars_note, alignment="l", escape=False, position=0)
+                _stars_note = (stars_note, "l", False)
             output = render_func(self, **kwargs)
-            if self.show_stars:
+            if self.table_params["show_significance_levels"]:
                 self.remove_note(note=_stars_note)
 
             return output
@@ -1138,7 +1408,7 @@ class ModelTable(Table):
         return super().render_html(outfile)
 
     @_render
-    def render_ascii(self) -> Union[str, None]:
+    def render_ascii(self) -> str:
         return super().render_ascii()
 
     ##### Properties #####
@@ -1164,116 +1434,6 @@ class ModelTable(Table):
             self.add_multicolumns(
                 [f"Dependent Variable: {name}"], [self.ncolumns], position=0
             )
-
-    ##### Properties #####
-
-    @property
-    def show_r2(self) -> bool:
-        return self._show_r2
-
-    @show_r2.setter
-    def show_r2(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_r2 = show
-
-    @property
-    def show_adjusted_r2(self) -> bool:
-        return self._show_adjusted_r2
-
-    @show_adjusted_r2.setter
-    def show_adjusted_r2(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_adjusted_r2 = show
-
-    @property
-    def show_pseudo_r2(self) -> bool:
-        return self._show_pseudo_r2
-
-    @show_pseudo_r2.setter
-    def show_pseudo_r2(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_pseudo_r2 = show
-
-    @property
-    def show_dof(self) -> bool:
-        return self._show_dof
-
-    @show_dof.setter
-    def show_dof(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_dof = show
-
-    @property
-    def show_cis(self) -> bool:
-        return self._show_cis
-
-    @show_cis.setter
-    def show_cis(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_cis = show
-
-    @property
-    def show_ses(self) -> bool:
-        return self._show_ses
-
-    @show_ses.setter
-    def show_ses(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_ses = show
-
-    @property
-    def show_fstat(self) -> bool:
-        return self._show_fstat
-
-    @show_fstat.setter
-    def show_fstat(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_fstat = show
-
-    @property
-    def single_row(self) -> bool:
-        return self._single_row
-
-    @single_row.setter
-    def single_row(self, single: bool) -> None:
-        assert isinstance(single, bool)
-        self._single_row = single
-
-    @property
-    def show_observations(self) -> bool:
-        return self._show_observations
-
-    @show_observations.setter
-    def show_observations(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_observations = show
-
-    @property
-    def show_ngroups(self) -> bool:
-        return self._show_ngroups
-
-    @show_ngroups.setter
-    def show_ngroups(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_ngroups = show
-
-    @property
-    def show_model_numbers(self) -> bool:
-        return self._show_model_numbers
-
-    @show_model_numbers.setter
-    def show_model_numbers(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_model_numbers = show
-
-    @property
-    def show_model_type(self) -> bool:
-        return self._show_model_type
-
-    @show_model_type.setter
-    def show_model_type(self, show: bool) -> None:
-        assert isinstance(show, bool)
-        self._show_model_type = show
 
 
 class PanelTable:

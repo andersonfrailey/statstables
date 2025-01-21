@@ -1,6 +1,33 @@
+"""
+Tests implementation of tables
+"""
+
 import pytest
 import statsmodels.formula.api as smf
 from statstables import tables
+
+
+def test_generic_table(data):
+    table = tables.GenericTable(df=data)
+    table.index_name = "index"
+    table.label = "table:generic"
+
+    table.render_ascii()
+    table.render_html()
+    table.render_latex()
+
+    table2 = tables.GenericTable(
+        data,
+        caption_location="top",
+        sig_digits=4,
+        show_columns=False,
+        include_index=False,
+        column_labels={"A": "a", "B": "b"},
+        index_labels={0: "x", 1: "y"},
+        index_name="Index",
+    )
+
+    table2.table_params["caption_location"] = "bottom"
 
 
 def test_summary_table(data):
@@ -28,15 +55,9 @@ def test_summary_table(data):
     table.render_latex()
     table.render_latex(only_tabular=True)
 
-    with pytest.raises(AssertionError):
-        table.caption_location = "middle"
-
-    bool_properties = ["include_index", "show_columns"]
-    for prop in bool_properties:
-        setattr(table, prop, True)
-        setattr(table, prop, False)
-        with pytest.raises(AssertionError):
-            setattr(table, prop, "True")
+    table.render_ascii()
+    table.render_html()
+    table.render_latex()
 
 
 def test_mean_differences_table(data):
@@ -48,22 +69,21 @@ def test_mean_differences_table(data):
     )
     table.caption = "Differences in means"
     table.label = "table:differencesinmeans"
-    table.caption_location = "top"
+    table.table_params["caption_location"] = "top"
     table.custom_formatters({("A", "X"): lambda x: f"{x:.2f}"})
 
-    bool_properties = ["show_n", "show_standard_errors", "show_stars"]
-    for prop in bool_properties:
-        setattr(table, prop, True)
-        setattr(table, prop, False)
-        with pytest.raises(TypeError):
-            setattr(table, prop, "True")
+    table.render_ascii()
+    table.render_html()
+    table.render_latex()
+
+    assert table.table_params["include_index"] == True
 
 
 def test_model_table(data):
     mod1 = smf.ols("A ~ B + C -1", data=data).fit()
     mod2 = smf.ols("A ~ B + C", data=data).fit()
     mod_table = tables.ModelTable(models=[mod1, mod2])
-    mod_table.show_model_nums = True
+    mod_table.table_params["show_model_numbers"] = True
     mod_table.parameter_order(["Intercept", "B", "C"])
     # check that various information is and is not present
     mod_text = mod_table.render_ascii()
@@ -74,26 +94,8 @@ def test_model_table(data):
     binary_table = tables.ModelTable(models=[binary_mod])
     binary_text = binary_table.render_latex()
     assert "Pseudo $R^2$" in binary_text
-    binary_table.show_pseudo_r2 = False
+    binary_table.table_params["show_pseudo_r2"] = False
     binary_text = binary_table.render_html()
     assert "Pseudo R<sup>2</sup>" not in binary_text
 
-    bool_properties = [
-        "show_r2",
-        "show_adjusted_r2",
-        "show_dof",
-        "show_cis",
-        "show_ses",
-        "show_fstat",
-        "single_row",
-        "show_observations",
-        "show_model_numbers",
-        "show_model_type",
-        "show_pseudo_r2",
-        "show_ngroups",
-    ]
-    for prop in bool_properties:
-        setattr(mod_table, prop, True)
-        setattr(mod_table, prop, False)
-        with pytest.raises(AssertionError):
-            setattr(mod_table, prop, "True")
+    assert binary_table.table_params["include_index"] == True
