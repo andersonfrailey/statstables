@@ -562,7 +562,12 @@ class Table(ABC):
         return None
 
     def render_html(
-        self, outfile: Union[str, Path, None] = None, table_class="", *args, **kwargs
+        self,
+        outfile: Union[str, Path, None] = None,
+        table_class="",
+        convert_latex=True,
+        *args,
+        **kwargs,
     ) -> str | None:
         """
         Render the table in HTML. Note that you will need to include the booktabs
@@ -584,14 +589,16 @@ class Table(ABC):
             If an outfile is not specified, the HTML string will be returned.
             Otherwise None will be returned.
         """
-        html_str = HTMLRenderer(self, _class=table_class).render()
+        html_str = HTMLRenderer(self, _class=table_class).render(
+            convert_latex=convert_latex
+        )
         if not outfile:
             return html_str
         Path(outfile).write_text(html_str)
         return None
 
-    def render_ascii(self) -> str:
-        return ASCIIRenderer(self).render()
+    def render_ascii(self, convert_latex=True) -> str:
+        return ASCIIRenderer(self).render(convert_latex=convert_latex)
 
     def __str__(self) -> str:
         return self.render_ascii()
@@ -944,12 +951,12 @@ class MeanDifferenceTable(Table):
         return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, outfile=None) -> str | None:
-        return super().render_html(outfile)
+    def render_html(self, outfile=None, convert_latex=True) -> str | None:
+        return super().render_html(outfile=outfile, convert_latex=convert_latex)
 
     @_render
-    def render_ascii(self) -> str:
-        return super().render_ascii()
+    def render_ascii(self, convert_latex=True) -> str:
+        return super().render_ascii(convert_latex=convert_latex)
 
     def _get_diffs(self):
         # TODO: allow for standard errors caluclated under dependent samples
@@ -1062,13 +1069,13 @@ class ModelTable(Table):
     model_stats = [
         ("observations", "Observations", False),
         ("ngroups", "N. Groups", False),
-        ("r2", {"latex": "$R^2$", "html": "R<sup>2</sup>", "ascii": "R2"}, False),
+        ("r2", {"latex": "$R^2$", "html": "R<sup>2</sup>", "ascii": "R^2"}, False),
         (
             "adjusted_r2",
             {
                 "latex": "Adjusted $R^2$",
                 "html": "Adjusted R<sup>2</sup>",
-                "ascii": "Adjusted R2",
+                "ascii": "Adjusted R^2",
             },
             False,
         ),
@@ -1077,7 +1084,7 @@ class ModelTable(Table):
             {
                 "latex": "Pseudo $R^2$",
                 "html": "Pseudo R<sup>2</sup>",
-                "ascii": "Pseudo R2",
+                "ascii": "Pseudo R^2",
             },
             False,
         ),
@@ -1404,12 +1411,12 @@ class ModelTable(Table):
         return super().render_latex(outfile, only_tabular)
 
     @_render
-    def render_html(self, outfile=None) -> Union[str, None]:
-        return super().render_html(outfile)
+    def render_html(self, outfile=None, convert_latex: bool = True) -> Union[str, None]:
+        return super().render_html(outfile=outfile, convert_latex=convert_latex)
 
     @_render
-    def render_ascii(self) -> str:
-        return super().render_ascii()
+    def render_ascii(self, convert_latex=True) -> str:
+        return super().render_ascii(convert_latex=convert_latex)
 
     ##### Properties #####
     @property

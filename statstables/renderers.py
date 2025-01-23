@@ -2,7 +2,7 @@ import math
 import statstables as st
 import textwrap
 from abc import ABC, abstractmethod
-from .utils import VALID_LINE_LOCATIONS
+from .utils import VALID_LINE_LOCATIONS, replace_latex
 
 
 class Renderer(ABC):
@@ -240,19 +240,22 @@ class HTMLRenderer(Renderer):
         self.calign = self.ALIGNMENTS[self.table.table_params["column_alignment"]]
         self._class = _class
 
-    def render(self):
-        out = self.generate_header()
-        out += self.generate_body()
-        out += self.generate_footer()
+    def render(self, convert_latex=True):
+        out = self.generate_header(convert_latex=convert_latex)
+        out += self.generate_body(convert_latex=convert_latex)
+        out += self.generate_footer(convert_latex=convert_latex)
         return out
 
-    def generate_header(self):
+    def generate_header(self, convert_latex=True):
         header = "<table>\n"
         if self._class:
             header = f'<table class="{self._class}">\n'
         header += "  <thead>\n"
         if self.table.caption and self.table.table_params["caption_location"] == "top":
-            header += f'    <tr><th  colspan="{self.ncolumns}" style="text-align:center">{self.table.caption}</th></tr>\n'
+            caption = self.table.caption
+            if convert_latex:
+                caption = replace_latex(caption)
+            header += f'    <tr><th  colspan="{self.ncolumns}" style="text-align:center">{caption}</th></tr>\n'
         for col, spans, underline in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
@@ -261,13 +264,18 @@ class HTMLRenderer(Renderer):
             th = '<th colspan="{s}" style="text-align:{a};">{c}</th>'
             if underline:
                 th = '<th colspan="{s}" style="text-align:{a};"><u>{c}</u></th>'
-            header += "      " + " ".join(
-                [
-                    # f'<th colspan="{s}" style="text-align:center;">{c}</th>'
-                    th.format(c=c, s=s, a=self.calign)
-                    for c, s in zip(col, spans)
-                ]
-            )
+            # header += "      " + " ".join(
+            #     [
+            #         th.format(c=c, s=s, a=self.calign)
+            #         for c, s in zip(col, spans)
+            #     ]
+            # )
+            header += "      "
+            for c, s in zip(col, spans):
+                _col = c
+                if convert_latex:
+                    _col = replace_latex(c)
+                header += " " + th.format(c=_col, s=s, a=self.calign)
             header += "\n"
             header += "    </tr>\n"
         for line in self.table.custom_html_lines["after-multicolumns"]:
@@ -275,9 +283,12 @@ class HTMLRenderer(Renderer):
             pass
         if self.table.table_params["show_columns"]:
             header += "    <tr>\n"
-            header += (
-                f"      <th>{self.table.index_name}</th>\n"
-            ) * self.table.table_params["include_index"]
+            _index_name = self.table.index_name
+            if convert_latex:
+                _index_name = replace_latex(_index_name)
+            header += (f"      <th>{_index_name}</th>\n") * self.table.table_params[
+                "include_index"
+            ]
             for col in self.table.columns:
                 header += f'      <th style="text-align:{self.calign};">{self.table._column_labels.get(col, col)}</th>\n'
             header += "    </tr>\n"
@@ -288,7 +299,7 @@ class HTMLRenderer(Renderer):
         header += "  <tbody>\n"
         return header
 
-    def generate_body(self):
+    def generate_body(self, convert_latex=True):
         rows = self.table._create_rows()
         row_str = ""
         for row in rows:
@@ -298,12 +309,14 @@ class HTMLRenderer(Renderer):
                 if i == 0 and self.table.table_params["include_index"]:
                     alignment = self.ialign
                 val = self._format_value(r, alignment)
+                if convert_latex:
+                    val = replace_latex(val)
                 row_str += f"{val}\n"
             row_str += "    </tr>\n"
         for line in self.table.custom_html_lines["after-body"]:
             row_str += line
         for line in self.table.custom_lines["after-body"]:
-            row_str += self._create_line(line)
+            row_str += self._create_line(line, convert_latex=convert_latex)
         if isinstance(self.table, st.tables.ModelTable):
             # insert a horizontal rule before the stats rows
             row_str += "    <tr>\n"
@@ -312,7 +325,7 @@ class HTMLRenderer(Renderer):
             )
             row_str += "    </tr>\n"
             for line in self.table.custom_lines["before-model-stats"]:
-                row_str += self._create_line(line)
+                row_str += self._create_line(line, convert_latex=convert_latex)
             stats_rows = self.table._create_stats_rows(renderer="html")
             for row in stats_rows:
                 row_str += "    <tr>\n"
@@ -324,36 +337,42 @@ class HTMLRenderer(Renderer):
                     row_str += f"{val}\n"
                 row_str += "    </tr>\n"
             for line in self.table.custom_lines["after-model-stats"]:
-                row_str += self._create_line(line)
+                row_str += self._create_line(line, convert_latex=convert_latex)
         return row_str
 
-    def generate_footer(self):
+    def generate_footer(self, convert_latex=True):
         footer = ""
         if self.table.custom_lines["after-footer"]:
             footer += "    <tr>\n"
             for line in self.table.custom_lines["after-footer"]:
-                footer += self._create_line(line)
+                footer += self._create_line(line, convert_latex=convert_latex)
             footer += "    </tr>\n"
         if self.table.notes:
             ncols = self.table.ncolumns + self.table.table_params["include_index"]
             for note, alignment, _ in self.table.notes:
                 _notes = textwrap.wrap(note, width=st.STParams["max_html_notes_length"])
                 for _note in _notes:
+                    _note_str = _note
+                    if convert_latex:
+                        _note_str = replace_latex(_note_str)
                     footer += (
                         f'    <tr><td colspan="{ncols}" '
                         f'style="text-align:{self.ALIGNMENTS[alignment]};'
-                        f'"><i>{_note}</i></td></tr>\n'
+                        f'"><i>{_note_str}</i></td></tr>\n'
                     )
         if (
             self.table.caption
             and self.table.table_params["caption_location"] == "bottom"
         ):
-            footer += f'    <tr><th colspan="{self.ncolumns}" style="text-align:center">{self.table.caption}</th></tr>\n'
+            caption = self.table.caption
+            if convert_latex:
+                caption = replace_latex(caption)
+            footer += f'    <tr><th colspan="{self.ncolumns}" style="text-align:center">{caption}</th></tr>\n'
         footer += "  </tbody>\n"
         footer += "</table>"
         return footer
 
-    def _create_line(self, line):
+    def _create_line(self, line, convert_latex=True):
         out = ""
         if line["deliminate"]:
             out += "    <tr>\n"
@@ -362,8 +381,11 @@ class HTMLRenderer(Renderer):
             )
             out += "    </tr>\n"
         out = "    <tr>\n"
+        label = line["label"]
+        if convert_latex:
+            label = replace_latex(label)
         out += (
-            f'      <th style="text-align:{self.ialign};"' + f">{line['label']}</th>\n"
+            f'      <th style="text-align:{self.ialign};"' + f">{label}</th>\n"
         ) * self.table.table_params["include_index"]
         for l in line["line"]:
             out += f'      <td style="text-align:{self.calign};">{l}</td>\n'
@@ -427,17 +449,20 @@ class ASCIIRenderer(Renderer):
         self.max_index_name_cell_size = 0
         self._len = 0
 
-    def render(self) -> str:
-        self._get_table_widths()
-        out = self.generate_header()
-        out += self.generate_body()
-        out += self.generate_footer()
+    def render(self, convert_latex=True) -> str:
+        self._get_table_widths(convert_latex=convert_latex)
+        out = self.generate_header(convert_latex=convert_latex)
+        out += self.generate_body(convert_latex=convert_latex)
+        out += self.generate_footer(convert_latex=convert_latex)
         return out
 
-    def generate_header(self) -> str:
+    def generate_header(self, convert_latex=True) -> str:
         header = ""
         if self.table.caption and self.table.table_params["caption_location"] == "top":
-            header += f"\n{self.table.caption:^{self._len + (2 * self._border_len)}}\n"
+            caption = self.table.caption
+            if convert_latex:
+                caption = replace_latex(caption)
+            header += f"\n{caption:^{self._len + (2 * self._border_len)}}\n"
         header += (
             st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
             + "\n"
@@ -462,7 +487,10 @@ class ASCIIRenderer(Renderer):
 
             for c, s in zip(col, span):
                 _size = self.max_body_cell_size * s
-                header += f"{c:^{_size}}"
+                _col = c
+                if convert_latex:
+                    _col = replace_latex(c)
+                header += f"{_col:^{_size}}"
                 uchar = "-" if c != "" else " "
                 underlines += f"{uchar * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
@@ -470,16 +498,22 @@ class ASCIIRenderer(Renderer):
                 header += underlines + f"{st.STParams['ascii_border_char']}\n"
         if self.table.table_params["show_columns"]:
             header += st.STParams["ascii_border_char"]
+            _index_name = self.table.index_name
+            if convert_latex:
+                _index_name = replace_latex(_index_name)
             header += (
-                f"{self.table.index_name:^{self.max_index_name_cell_size}}"
+                f"{_index_name:^{self.max_index_name_cell_size}}"
             ) * self.table.table_params["include_index"]
             for col in self.table.columns:
-                header += f"{self.table._column_labels.get(col, col):^{self.max_body_cell_size}}"
+                _col = self.table._column_labels.get(col, col)
+                if convert_latex:
+                    _col = replace_latex(_col)
+                header += f"{_col:^{self.max_body_cell_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
 
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
-                header += self._create_line(line)
+                header += self._create_line(line, convert_latex=convert_latex)
         header += (
             st.STParams["ascii_border_char"]
             + st.STParams["ascii_mid_rule_char"] * (self._len)
@@ -488,7 +522,7 @@ class ASCIIRenderer(Renderer):
         return header
 
     # get the length of the header lines by counting number of characters in each column
-    def generate_body(self) -> str:
+    def generate_body(self, convert_latex=True) -> str:
         rows = self.table._create_rows()
         body = ""
         for row in rows:
@@ -496,18 +530,19 @@ class ASCIIRenderer(Renderer):
             for i, r in enumerate(row):
                 _size = self.max_body_cell_size
                 _align = self.calign
+                _val = self._format_value(r)
+                if convert_latex:
+                    _val = replace_latex(_val)
                 if i == 0 and self.table.table_params["include_index"]:
                     _size = self.max_index_name_cell_size - self.padding
                     _align = self.ialign
-                    body += (
-                        " " * self.padding + f"{self._format_value(r):{_align}{_size}}"
-                    )
+                    body += " " * self.padding + f"{_val:{_align}{_size}}"
                 else:
-                    body += f"{self._format_value(r):{_align}{_size}}"
+                    body += f"{_val:{_align}{_size}}"
             body += f"{st.STParams['ascii_border_char']}\n"
 
         for line in self.table.custom_lines["after-body"]:
-            body += self._create_line(line)
+            body += self._create_line(line, convert_latex=convert_latex)
 
         if isinstance(self.table, st.tables.ModelTable):
             body += (
@@ -516,26 +551,26 @@ class ASCIIRenderer(Renderer):
                 + "\n"
             )
             for line in self.table.custom_lines["before-model-stats"]:
-                body += self._create_line(line)
+                body += self._create_line(line, convert_latex=convert_latex)
             stats_rows = self.table._create_stats_rows(renderer="ascii")
             for row in stats_rows:
                 body += f"{st.STParams['ascii_border_char']}"
                 for i, r in enumerate(row):
                     _size = self.max_body_cell_size
+                    _val = self._format_value(r)
+                    if convert_latex:
+                        _val = replace_latex(_val)
                     if i == 0 and self.table.table_params["include_index"]:
                         _size = self.max_index_name_cell_size - self.padding
-                        body += (
-                            " " * self.padding
-                            + f"{self._format_value(r):{self.ialign}{_size}}"
-                        )
+                        body += " " * self.padding + f"{_val:{self.ialign}{_size}}"
                     else:
-                        body += f"{self._format_value(r):{self.calign}{_size}}"
+                        body += f"{_val:{self.calign}{_size}}"
                 body += f"{st.STParams['ascii_border_char']}\n"
             for line in self.table.custom_lines["after-model-stats"]:
-                body += self._create_line(line)
+                body += self._create_line(line, convert_latex=convert_latex)
         return body
 
-    def generate_footer(self) -> str:
+    def generate_footer(self, convert_latex=True) -> str:
         footer = st.STParams["ascii_footer_char"] * (self._len + (2 * self._border_len))
         if st.STParams["ascii_double_bottom_rule"]:
             footer += st.STParams["ascii_footer_char"] * (
@@ -544,7 +579,7 @@ class ASCIIRenderer(Renderer):
         if self.table.custom_lines["after-footer"]:
             footer += "\n"
             for line in self.table.custom_lines["after-footer"]:
-                footer += self._create_line(line)
+                footer += self._create_line(line, convert_latex=convert_latex)
             footer += st.STParams["ascii_footer_char"] * (
                 self._len + (2 * self._border_len)
             )
@@ -560,15 +595,21 @@ class ASCIIRenderer(Renderer):
                 )
                 _alignment = self.ALIGNMENTS[alignment]
                 for _note in notes:
-                    footer += f"\n{_note:{_alignment}{self._len}}"
+                    _note_val = _note
+                    if convert_latex:
+                        _note_val = replace_latex(_note_val)
+                    footer += f"\n{_note_val:{_alignment}{self._len}}"
         if (
             self.table.caption
             and self.table.table_params["caption_location"] == "bottom"
         ):
-            footer += f"\n{self.table.caption:^{self._len + (2 * self._border_len)}}\n"
+            caption = self.table.caption
+            if convert_latex:
+                caption = replace_latex(caption)
+            footer += f"\n{caption:^{self._len + (2 * self._border_len)}}\n"
         return footer
 
-    def _create_line(self, line) -> str:
+    def _create_line(self, line, convert_latex=True) -> str:
         _line = ""
         if line["deliminate"]:
             _line += (
@@ -577,24 +618,33 @@ class ASCIIRenderer(Renderer):
                 + "\n"
             )
         _line += st.STParams["ascii_border_char"]
+        label = line["label"]
+        if convert_latex:
+            label = replace_latex(label)
         if self.table.table_params["include_index"]:
             _line += (
                 " " * self.padding
-                + f"{line['label']:{self.ialign}{self.max_index_name_cell_size - self.padding}}"
+                + f"{label:{self.ialign}{self.max_index_name_cell_size - self.padding}}"
             )
         for l in line["line"]:
-            _line += f"{l:{self.calign}{self.max_body_cell_size}}"
+            _l = l
+            if convert_latex:
+                _l = replace_latex(l)
+            _line += f"{_l:{self.calign}{self.max_body_cell_size}}"
         _line += st.STParams["ascii_border_char"] + "\n"
         return _line
 
-    def _get_table_widths(self) -> None:
+    def _get_table_widths(self, convert_latex=True) -> None:
         self.reset_size_parameters()
         # find longest row and biggest cell
         rows = self.table._create_rows()
         for row in rows:
             row_len = 0
             for i, cell in enumerate(row):
-                cell_size = len(str(cell["value"])) + (self.padding * 2)
+                _val = cell["value"]
+                if convert_latex:
+                    _val = replace_latex(_val)
+                cell_size = len(_val) + (self.padding * 2)
                 row_len += cell_size
                 # find specific length if it's an index
                 if i == 0 and self.table.table_params["include_index"]:
@@ -610,7 +660,10 @@ class ASCIIRenderer(Renderer):
             for row in stats_rows:
                 row_len = 0
                 for i, cell in enumerate(row):
-                    cell_size = len(str(cell["value"])) + (self.padding * 2)
+                    _val = cell["value"]
+                    if convert_latex:
+                        _val = replace_latex(_val)
+                    cell_size = len(_val) + (self.padding * 2)
                     self.max_body_cell_size = max(self.max_body_cell_size, cell_size)
                     row_len += cell_size
                     if i == 0 and self.table.table_params["include_index"]:
@@ -620,16 +673,22 @@ class ASCIIRenderer(Renderer):
                 self.max_row_len = max(self.max_row_len, row_len)
 
         if self.table.table_params["include_index"]:
-            index_name_size = len(str(self.table.index_name)) + (self.padding * 2)
+            _index_name = self.table.index_name
+            if convert_latex:
+                _index_name = replace_latex(_index_name)
+            index_name_size = len(_index_name) + (self.padding * 2)
             self.max_index_name_cell_size = max(
                 self.max_index_name_cell_size, index_name_size
             )
             # check line size of all line labels
             for loc in VALID_LINE_LOCATIONS:
                 for line in self.table.custom_lines[loc]:
+                    label = line["label"]
+                    if convert_latex:
+                        label = replace_latex(label)
                     self.max_index_name_cell_size = max(
                         self.max_index_name_cell_size,
-                        len(line["label"]) + (self.padding * 2),
+                        len(label) + (self.padding * 2),
                     )
 
         # find longest column and length needed for all columns
@@ -639,6 +698,8 @@ class ASCIIRenderer(Renderer):
             for col in self.table.columns:
                 # check label size
                 label = self.table._column_labels.get(col, col)
+                if convert_latex:
+                    label = replace_latex(label)
                 col_size = len(str(label)) + (self.padding * 2)
                 self.max_body_cell_size = max(self.max_body_cell_size, col_size)
                 col_len += col_size
@@ -654,7 +715,10 @@ class ASCIIRenderer(Renderer):
                     # of the body cells
                     span_size = self.max_body_cell_size * s
                     # size of the multicolumn label after padding
-                    col_size = len(c) + (self.padding * 2)
+                    _col = c
+                    if convert_latex:
+                        _col = replace_latex(_col)
+                    col_size = len(_col) + (self.padding * 2)
                     multi_col_size = math.ceil(max(span_size, col_size) / s)
                     self.max_body_cell_size = max(
                         self.max_body_cell_size, multi_col_size

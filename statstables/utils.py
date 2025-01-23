@@ -1,4 +1,5 @@
 import numpy as np
+import unicodeit
 
 
 def format_values(vals, pvals, plevels, sigdigits):
@@ -43,3 +44,15 @@ def validate_line_location(line_location: str | None) -> None:
             f"Invalid line location: {line_location}. "
             f"Valid line locations are: {VALID_LINE_LOCATIONS}"
         )
+
+
+def replace_latex(line: str) -> str:
+    assert isinstance(line, str)
+    # remove dollar signs used to indicate latex section
+    if "\\$" not in line:
+        line = line.replace("$", "")
+    else:
+        line = line.replace("\\$", "__dollar_sign__")
+        line = line.replace("$", "")
+        line = line.replace("__dollar_sign__", "$")
+    return unicodeit.replace(line)
