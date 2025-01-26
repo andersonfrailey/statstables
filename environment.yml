@@ -12,4 +12,5 @@ dependencies:
   - pip:
     - statsmodels
     - linearmodels
+    - unicodeit
   
