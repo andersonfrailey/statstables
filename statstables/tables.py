@@ -1,4 +1,5 @@
 import copy
+import numbers
 import pandas as pd
 import numpy as np
 import statstables as st
@@ -612,13 +613,12 @@ class Table(ABC):
     def _default_formatter(self, value: Union[int, float, str], **kwargs) -> str:
         thousands_sep = self.table_params["thousands_sep"]
         sig_digits = self.table_params["sig_digits"]
-        if isinstance(value, (int, float)):
+        # format the numbers, otherwise just return a string
+        if isinstance(value, numbers.Number):
+            if float(value).is_integer():
+                return f"{value:{thousands_sep}}"
             return f"{value:{thousands_sep}.{sig_digits}f}"
-        elif isinstance(value, int):
-            return f"{value:{thousands_sep}}"
-        elif isinstance(value, str):
-            return value
-        return value
+        return str(value)
 
     def _format_value(
         self,
