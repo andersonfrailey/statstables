@@ -3,6 +3,7 @@ Tests implementation of tables
 """
 
 import pytest
+import pandas as pd
 import statsmodels.formula.api as smf
 from statstables import tables
 
@@ -28,6 +29,10 @@ def test_generic_table(data):
     )
 
     table2.table_params["caption_location"] = "bottom"
+
+    df = pd.DataFrame({"one": [1, 2, 3], "two": [-1, -2, -3]})
+    table = tables.GenericTable(df)
+    print(table)
 
 
 def test_summary_table(data):
