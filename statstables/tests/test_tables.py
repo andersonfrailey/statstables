@@ -30,7 +30,12 @@ def test_generic_table(data):
 
     table2.table_params["caption_location"] = "bottom"
 
+    # a couple of basic tables just to make sure the minimum example works
     df = pd.DataFrame({"one": [1, 2, 3], "two": [-1, -2, -3]})
+    table = tables.GenericTable(df)
+    print(table)
+
+    df = pd.DataFrame({"one": ["1", "2", "3"], "two": ["-1", "-2", "-3"]})
     table = tables.GenericTable(df)
     print(table)
 
