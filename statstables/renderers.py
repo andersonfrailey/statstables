@@ -63,6 +63,7 @@ class LatexRenderer(Renderer):
         out = self.generate_header(only_tabular)
         out += self.generate_body()
         out += self.generate_footer(only_tabular)
+        out = out.replace("−", "-")
 
         return out
 
@@ -81,7 +82,10 @@ class LatexRenderer(Renderer):
         content_columns = self.calign * self.table.ncolumns
         if self.table.table_params["include_index"]:
             content_columns = self.ialign + content_columns
-        header += "\\begin{tabular}{" + content_columns + "}\n"
+        begin = "\\begin{tabular}{"
+        # if self.table.longtable:
+        #     begin = "\\begin{longtable}{"
+        header += begin + content_columns + "}\n"
         header += "  \\toprule\n"
         if st.STParams["double_top_rule"]:
             header += "  \\toprule\n"
@@ -173,6 +177,15 @@ class LatexRenderer(Renderer):
                 _note = self._escape(note) if escape else note
                 footer += "{{" + "\\small \\textit{" + _note + "}}}\\\\\n"
 
+        # if self.table.longtable:
+        #     if self.table.table_params["caption_location"] == "bottom":
+        #         if self.table.caption is not None:
+        #             footer += "  \\caption{" + self.table.caption + "}\n"
+
+        #         if self.table.label is not None:
+        #             footer += "  \\label{" + self.table.label + "}\n"
+        #     footer += "\\end{longtable}\n"
+        # else:
         footer += "\\end{tabular}\n"
         if not only_tabular:
             if self.table.table_params["caption_location"] == "bottom":
@@ -244,6 +257,8 @@ class HTMLRenderer(Renderer):
         out = self.generate_header(convert_latex=convert_latex)
         out += self.generate_body(convert_latex=convert_latex)
         out += self.generate_footer(convert_latex=convert_latex)
+        # sometimes python uses the wrong encoding for a minus sign/hyphen. Accounts for that
+        out = out.replace("−", "-")
         return out
 
     def generate_header(self, convert_latex=True):
@@ -402,7 +417,7 @@ class HTMLRenderer(Renderer):
             _id = formatting_dict["id"]
             cell += f' id="{_id}"'
         # cell style section
-        style = f' style="text-align:{alignment};'
+        style = f' style="text-align: {alignment};'
         if formatting_dict["color"]:
             style += f" color: {formatting_dict['color']};"
         # close out the attributes section of the code
@@ -454,6 +469,7 @@ class ASCIIRenderer(Renderer):
         out = self.generate_header(convert_latex=convert_latex)
         out += self.generate_body(convert_latex=convert_latex)
         out += self.generate_footer(convert_latex=convert_latex)
+        out = out.replace("−", "-")
         return out
 
     def generate_header(self, convert_latex=True) -> str:
@@ -501,9 +517,11 @@ class ASCIIRenderer(Renderer):
             _index_name = self.table.index_name
             if convert_latex:
                 _index_name = replace_latex(_index_name)
-            header += (
-                f"{_index_name:^{self.max_index_name_cell_size}}"
-            ) * self.table.table_params["include_index"]
+            _size = self.max_index_name_cell_size - self.padding
+            _align = self.ialign
+            header += (f"{_index_name:{_align}{_size}}") * self.table.table_params[
+                "include_index"
+            ]
             for col in self.table.columns:
                 _col = self.table._column_labels.get(col, col)
                 if convert_latex:

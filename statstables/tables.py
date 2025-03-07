@@ -37,6 +37,7 @@ class Table(ABC):
         index_name: str = "",
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
+        # longtable: bool = False,
         **kwargs,
     ):
         user_params = {
@@ -63,6 +64,7 @@ class Table(ABC):
         if default_formatter is not None:
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
+        # self.longtable = longtable
 
     def reset_params(self, restore_to_defaults=False) -> None:
         """
@@ -551,6 +553,9 @@ class Table(ABC):
             If an outfile is not specified, the LaTeX string will be returned.
             Otherwise None will be returned.
         """
+        # longtable environments are their own thing. They don't go in table environments
+        # if self.longtable:
+        #     only_tabular = True
         tex_str = LatexRenderer(self).render(only_tabular=only_tabular)
         if not outfile:
             return tex_str
@@ -616,7 +621,7 @@ class Table(ABC):
         # format the numbers, otherwise just return a string
         if isinstance(value, numbers.Number):
             if float(value).is_integer():
-                return f"{value:{thousands_sep}}"
+                return f"{value:{thousands_sep}.0f}"
             return f"{value:{thousands_sep}.{sig_digits}f}"
         return str(value)
 
@@ -652,7 +657,9 @@ class Table(ABC):
             validate_format_dict(formatted_value)
             return ChainMap(formatted_value, DEFAULT_FORMATS)
         else:
-            raise ValueError("Formatter must return a dictionary or string")
+            raise ValueError(
+                f"Formatter must return a dictionary or string. Returns {type(formatted_value)}"
+            )
 
     @abstractmethod
     def _create_rows(self) -> list[list[ChainMap]]:
@@ -864,7 +871,8 @@ class MeanDifferenceTable(Table):
         self.reset_params()
         self._get_diffs()
         self.ncolumns = self.means.shape[1]
-        self.columns = self.means.columns
+        # convert columns to strings to avoid issues with numerical groups
+        self.columns = self.means.columns.astype(str)
         self.reset_custom_features()
         self.rename_columns(column_labels)
         self.rename_index(index_labels)
@@ -1025,7 +1033,7 @@ class MeanDifferenceTable(Table):
                         formatted_se = copy.copy(formatted_val)
                         # formatted_se = self._format_value(_index, col, se)
                         formatted_se["value"] = (
-                            f"({se:.{self.table_params['sig_digits']}f})"
+                            f"({se:,.{self.table_params['sig_digits']}f})"
                         )
                         sem_row.append(formatted_se)
                     except KeyError:
@@ -1044,10 +1052,12 @@ class MeanDifferenceTable(Table):
 
 
 class SummaryTable(GenericTable):
-    def __init__(self, df: pd.DataFrame, var_list: list[str], **kwargs):
+    def __init__(self, df: pd.DataFrame, var_list: list[str] | None = None, **kwargs):
+        if var_list is None:
+            var_list = df.columns
         summary_df = df[var_list].describe()
         super().__init__(summary_df, **kwargs)
-        self.reset_custom_features()
+        # self.reset_custom_features()
 
     def reset_custom_features(self):
         super().reset_custom_features()
@@ -1060,7 +1070,7 @@ class SummaryTable(GenericTable):
                 "max": "Max.",
             }
         )
-        self.custom_formatters({"count": lambda x: int(x)})
+        self.custom_formatters({"count": lambda x: f"{int(x):,}"})
 
 
 class ModelTable(Table):
@@ -1448,5 +1458,7 @@ class PanelTable:
     Merge two tables together. Not implemented yet
     """
 
-    def __init__(self, panels: list[Table]):
+    def __init__(self, panels: list[Table], title_alignment: str):
+        for table in panels:
+            assert isinstance(table, Table)
         pass
