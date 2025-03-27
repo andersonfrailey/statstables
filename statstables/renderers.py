@@ -87,7 +87,7 @@ class LatexRenderer(Renderer):
         #     begin = "\\begin{longtable}{"
         header += begin + content_columns + "}\n"
         header += "  \\toprule\n"
-        if st.STParams["double_top_rule"]:
+        if self.table.table_params["double_top_rule"]:
             header += "  \\toprule\n"
         for col, spans, underline in self.table._multicolumns:
             # TODO: convert the line below to allow for labeling each multicolumn

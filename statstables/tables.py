@@ -328,7 +328,7 @@ class Table(ABC):
             A list with each element that will comprise the line. the number of
             elements of this list should equal the number of columns in the table
         location : str, optional
-            Where on the table to place the line, by default "bottom"
+            Where on the table to place the line, by default "after-body"
         label : str, optional:
             The index label for the line, by default ""
         deliminate: bool, optional
@@ -1063,7 +1063,7 @@ class SummaryTable(GenericTable):
         super().reset_custom_features()
         self.rename_index(
             {
-                "count": "Count",
+                "count": "Observations",
                 "mean": "Mean",
                 "std": "Std. Dev.",
                 "min": "Min.",
