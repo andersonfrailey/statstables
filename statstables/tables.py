@@ -563,6 +563,8 @@ class Table(ABC):
         preamble += "\n"
         preamble += r"% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble."
         preamble += "\n\n"
+        preamble += r"% If you are making a longtable, you must add \usepackage{longtable} to the preamble."
+        preamble += "\n\n"
         tex_str = preamble + tex_str
         Path(outfile).write_text(tex_str)
         return None

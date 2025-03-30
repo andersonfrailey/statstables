@@ -141,7 +141,7 @@ class LatexRenderer(Renderer):
             column_content += (
                 "  " + self.table.index_name + " & "
             ) * self.table.table_params["include_index"]
-            header += " & ".join(
+            header += "  " + " & ".join(
                 [
                     self._escape(self.table._column_labels.get(col, col))
                     for col in self.table.columns
@@ -166,21 +166,18 @@ class LatexRenderer(Renderer):
         header += "  \\midrule\n"
 
         if self.table.longtable:
-            header += "  \\endfirsthead\n"
+            header += "  \\endfirsthead\n\n"
 
             # define columns for other heads
-            header += "\\\\\n"
+            # header += "\\\\\n"
             header += "  \\toprule\n"
             if self.table.table_params["double_top_rule"]:
                 header += "  \\toprule\n"
-            header += column_content + "\n"
+            header += "  " + column_content + "\n"
             header += "  \\midrule\n  \\endhead\n\n  \\midrule\n"
             n = len(self.table.columns) + (1 * self.table.table_params["include_index"])
             header += (
-                "  \\multicolumn{"
-                + f"{n}"
-                + r"}{r}{Continued on next page} \\\\"
-                + "\n"
+                "  \\multicolumn{" + f"{n}" + r"}{r}{Continued on next page} \\" + "\n"
             )
             header += "  \\midrule\n  \\endfoot\n\n  \\bottomrule\n  \\endlastfoot \n\n"
 
