@@ -73,26 +73,42 @@ class LatexRenderer(Renderer):
             header += "\\begin{table}[!ht]\n  \\centering\n"
 
             if self.table.table_params["caption_location"] == "top":
-                if self.table.caption is not None:
+                # if it's a long table, caption must go in longtable environment
+                if self.table.caption is not None and not self.table.longtable:
                     header += "  \\caption{" + self.table.caption + "}\n"
 
-                if self.table.label is not None:
+                if self.table.label is not None and not self.table.longtable:
                     header += "  \\label{" + self.table.label + "}\n"
 
+        # alignment for the individual columns
         content_columns = self.calign * self.table.ncolumns
         if self.table.table_params["include_index"]:
             content_columns = self.ialign + content_columns
         begin = "\\begin{tabular}{"
-        # if self.table.longtable:
-        #     begin = "\\begin{longtable}{"
+        if self.table.longtable:
+            begin = "\\begin{longtable}{"
         header += begin + content_columns + "}\n"
+        # add caption for longtables
+        if (
+            self.table.table_params["caption_location"] == "top"
+            and self.table.longtable
+        ):
+            if self.table.caption is not None:
+                header += "  \\caption{" + self.table.caption + "}\n"
+
+            if self.table.label is not None:
+                header += "  \\label{" + self.table.label + "}\n"
         header += "  \\toprule\n"
         if self.table.table_params["double_top_rule"]:
             header += "  \\toprule\n"
+        column_content = (
+            ""  # created for storing column info that's repeated in a longtable
+        )
         for col, spans, underline in self.table._multicolumns:
             # TODO: convert the line below to allow for labeling each multicolumn
             # header += ("  " + self.table.index_name + " & ") * self.table.table_params['include_index']
             header += "  & " * self.table.table_params["include_index"]
+            column_content += "  & " * self.table.table_params["include_index"]
             underline_line = ""
             underline_start = self.table.table_params["include_index"] + 1
             mcs = []
@@ -110,29 +126,63 @@ class LatexRenderer(Renderer):
                     )
                     underline_start += s
             header += " & ".join(mcs) + " \\\\\n"
+            column_content += " & ".join(mcs) + " \\\\\n"
             if underline:
                 header += "  " + underline_line + " \\\\\n"
+                column_content += "  " + underline_line + " \\\\\n"
         if self.table.custom_tex_lines["after-multicolumns"]:
             for line in self.table.custom_tex_lines["after-multicolumns"]:
                 header += "  " + line + "\n"
+                column_content += "  " + line + "\n"
         if self.table.table_params["show_columns"]:
             header += ("  " + self.table.index_name + " & ") * self.table.table_params[
                 "include_index"
             ]
+            column_content += (
+                "  " + self.table.index_name + " & "
+            ) * self.table.table_params["include_index"]
             header += " & ".join(
                 [
                     self._escape(self.table._column_labels.get(col, col))
                     for col in self.table.columns
                 ]
             )
+            column_content += " & ".join(
+                [
+                    self._escape(self.table._column_labels.get(col, col))
+                    for col in self.table.columns
+                ]
+            )
             header += "\\\\\n"
+            column_content += "\\\\\n"
         if self.table.custom_tex_lines["after-columns"]:
             for line in self.table.custom_tex_lines["after-columns"]:
                 header += "  " + line + "\n"
+                column_content += "  " + line + "\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
                 header += self._create_line(line)
+                column_content += self._create_line(line)
         header += "  \\midrule\n"
+
+        if self.table.longtable:
+            header += "  \\endfirsthead\n"
+
+            # define columns for other heads
+            header += "\\\\\n"
+            header += "  \\toprule\n"
+            if self.table.table_params["double_top_rule"]:
+                header += "  \\toprule\n"
+            header += column_content + "\n"
+            header += "  \\midrule\n  \\endhead\n\n  \\midrule\n"
+            n = len(self.table.columns) + (1 * self.table.table_params["include_index"])
+            header += (
+                "  \\multicolumn{"
+                + f"{n}"
+                + r"}{r}{Continued on next page} \\\\"
+                + "\n"
+            )
+            header += "  \\midrule\n  \\endfoot\n\n  \\bottomrule\n  \\endlastfoot \n\n"
 
         return header
 
@@ -177,16 +227,16 @@ class LatexRenderer(Renderer):
                 _note = self._escape(note) if escape else note
                 footer += "{{" + "\\small \\textit{" + _note + "}}}\\\\\n"
 
-        # if self.table.longtable:
-        #     if self.table.table_params["caption_location"] == "bottom":
-        #         if self.table.caption is not None:
-        #             footer += "  \\caption{" + self.table.caption + "}\n"
+        if self.table.longtable:
+            if self.table.table_params["caption_location"] == "bottom":
+                if self.table.caption is not None:
+                    footer += "  \\caption{" + self.table.caption + "}\n"
 
-        #         if self.table.label is not None:
-        #             footer += "  \\label{" + self.table.label + "}\n"
-        #     footer += "\\end{longtable}\n"
-        # else:
-        footer += "\\end{tabular}\n"
+                if self.table.label is not None:
+                    footer += "  \\label{" + self.table.label + "}\n"
+            footer += "\\end{longtable}\n"
+        else:
+            footer += "\\end{tabular}\n"
         if not only_tabular:
             if self.table.table_params["caption_location"] == "bottom":
                 if self.table.caption is not None:

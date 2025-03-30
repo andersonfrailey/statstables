@@ -37,7 +37,7 @@ class Table(ABC):
         index_name: str = "",
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
-        # longtable: bool = False,
+        longtable: bool = False,
         **kwargs,
     ):
         user_params = {
@@ -64,7 +64,7 @@ class Table(ABC):
         if default_formatter is not None:
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
-        # self.longtable = longtable
+        self.longtable = longtable
 
     def reset_params(self, restore_to_defaults=False) -> None:
         """
@@ -554,8 +554,8 @@ class Table(ABC):
             Otherwise None will be returned.
         """
         # longtable environments are their own thing. They don't go in table environments
-        # if self.longtable:
-        #     only_tabular = True
+        if self.longtable:
+            only_tabular = True
         tex_str = LatexRenderer(self).render(only_tabular=only_tabular)
         if not outfile:
             return tex_str
@@ -797,6 +797,7 @@ class MeanDifferenceTable(Table):
         index_name: str = "",
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
+        longtable: bool = False,
         **kwargs,
     ):
         """
@@ -884,6 +885,7 @@ class MeanDifferenceTable(Table):
         if default_formatter is not None:
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
+        self.longtable = longtable
 
     def reset_params(self, restore_to_defaults=False):
         super().reset_params(restore_to_defaults)
@@ -1137,6 +1139,7 @@ class ModelTable(Table):
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
         dependent_variable_name: str | None = None,
+        longtable: bool = False,
         **kwargs,
     ):
         """
@@ -1210,6 +1213,7 @@ class ModelTable(Table):
         self.label = label
         self.caption = caption
         self.index_name = index_name
+        self.longtable = longtable
         self.default_formatter = self._default_formatter
         if default_formatter is not None:
             self.default_formatter = default_formatter
