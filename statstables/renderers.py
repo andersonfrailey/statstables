@@ -564,7 +564,7 @@ class ASCIIRenderer(Renderer):
             _index_name = self.table.index_name
             if convert_latex:
                 _index_name = replace_latex(_index_name)
-            _size = self.max_index_name_cell_size - self.padding
+            _size = self.max_index_name_cell_size
             _align = self.ialign
             header += (f"{_index_name:{_align}{_size}}") * self.table.table_params[
                 "include_index"
