@@ -9,7 +9,7 @@ from typing import Union, Callable
 from collections import defaultdict, ChainMap
 from pathlib import Path
 from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
-from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS
+from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS, latex_preamble
 from .parameters import TableParams, MeanDiffsTableParams, ModelTableParams
 from .cellformatting import DEFAULT_FORMATS, validate_format_dict
 
@@ -559,12 +559,7 @@ class Table(ABC):
         tex_str = LatexRenderer(self).render(only_tabular=only_tabular)
         if not outfile:
             return tex_str
-        preamble = r"% You must add \usepackage{booktabs} to your LaTex document for table to compile."
-        preamble += "\n"
-        preamble += r"% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble."
-        preamble += "\n\n"
-        preamble += r"% If you are making a longtable, you must add \usepackage{longtable} to the preamble."
-        preamble += "\n\n"
+        preamble = latex_preamble()
         tex_str = preamble + tex_str
         Path(outfile).write_text(tex_str)
         return None
@@ -1461,10 +1456,156 @@ class ModelTable(Table):
 
 class PanelTable:
     """
-    Merge two tables together. Not implemented yet
+    Merge multiple tables together. Not implemented yet
     """
 
-    def __init__(self, panels: list[Table], title_alignment: str):
+    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
+    ALIGNMENTS = {
+        "l": "l",
+        "c": "c",
+        "r": "r",
+        "left": "l",
+        "center": "c",
+        "right": "r",
+    }
+    ASCII_ALIGNMENTS = {
+        "l": "<",
+        "c": "^",
+        "r": ">",
+        "left": "<",
+        "center": "^",
+        "right": ">",
+    }
+
+    def __init__(
+        self,
+        panels: list[Table],
+        panel_labels: list[str],
+        enumerate_type: str | None = "alpha_upper",
+        panel_label_alignment: str = "l",
+    ):
         for table in panels:
             assert isinstance(table, Table)
-        pass
+        npanels = len(panels)
+        nlabels = len(panel_labels)
+        if len(panels) > len(panel_labels):
+            msg = f"There are {npanels} but only {nlabels} labels. Each panel must have a lable"
+            raise AssertionError(msg)
+        elif npanels < nlabels:
+            msg = f"There are {nlabels} labels but only {npanels} panels. Each label must be associated with a panel"
+            raise AssertionError(msg)
+        valid_enum_types = ["alpha_upper", "alpha_lower", "int", "roman", None]
+        assert (
+            enumerate_type in valid_enum_types
+        ), f"{enumerate_type} is invalid. Must be in {valid_enum_types}"
+        self.panels = panels
+        self.panel_labels = panel_labels
+        self.enumerate_type = enumerate_type
+        assert panel_label_alignment in self.VALID_ALIGNMENTS
+        self.panel_label_alignment = panel_label_alignment
+
+    def render_latex(self, outfile) -> str | None:
+        # assign multicolumns to each table
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+        tex_str = ""
+        for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
+            # if it is not the first table, turn off double top rule
+            if i != 0:
+                table.double_top_rule = False
+            # add multicolumn to the table
+            lable_str = f"Panel {self.label_char}) {label}"
+            _tex_str = table.render_latex(only_tabular=True)
+            if self.enumerate_type is not None:
+                _tex_str = self._modify_latex(table=table, label=lable_str)
+            tex_str += _tex_str
+            self._increment_label_char()
+
+        if not outfile:
+            return tex_str
+        preamble = latex_preamble()
+        tex_str = preamble + tex_str
+        Path(outfile).write_text(tex_str)
+        return None
+
+    def render_ascii(self) -> str:
+        # assign multicolumns to each table
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+        # get all the table widths to know how large to make panels
+        renderers = []
+        max_width = 0
+        for table in self.panels:
+            renderer = ASCIIRenderer(table)
+            renderer._get_table_widths()
+            table_size = renderer._len + (2 * renderer._border_len)
+            max_width = max(max_width, table_size)
+
+        # loop through the tables and actually make them. add all together for panels
+        out_str = ""
+        for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
+            # if it is not the first table, turn off double top rule
+            if i != 0:
+                table.double_top_rule = False
+            # add multicolumn to the table
+            _label = f"Panel {self.label_char}) {label}"
+            label_align = self.ASCII_ALIGNMENTS[self.panel_label_alignment]
+            label_str = f"{_label:{label_align}{max_width}}\n"
+            table_str = table.render_ascii()
+            out_str += label_str + table_str + "\n"
+            self._increment_label_char()
+
+        return out_str
+
+    def _modify_latex(self, table: Table, label: str):
+        tex_str = table.render_latex(only_tabular=True)
+        out_str = tex_str.replace("\\begin{tabular}\n", "")
+        new_start = "\\begin{tabular}\n"
+        ncols = len(table.columns) + int(table.table_params["include_index"])
+        label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
+        new_start += (
+            "  \\multicolumn{"
+            + f"{ncols}"
+            + "}"
+            + f"{{{label_alignment}}}"
+            + f"{{{label}}}"
+            + r"\\"
+            + "\n"
+        )
+        return new_start + out_str
+
+    def _increment_label_char(self):
+        """
+        Increment the label on each panel
+        """
+        if self.enumerate_type is None:
+            pass
+        # roman numerals not implemented yet
+        elif self.enumerate_type == "roman":
+            pass
+        else:
+            self.label_char = chr(ord(self.label_char) + 1)
+
+    def __str__(self) -> str:
+        return self.render_ascii()
+
+    def __repr__(self) -> str:
+        return self.render_ascii()

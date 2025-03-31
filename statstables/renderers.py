@@ -128,8 +128,8 @@ class LatexRenderer(Renderer):
             header += " & ".join(mcs) + " \\\\\n"
             column_content += " & ".join(mcs) + " \\\\\n"
             if underline:
-                header += "  " + underline_line + " \\\\\n"
-                column_content += "  " + underline_line + " \\\\\n"
+                header += "  " + underline_line + "\n"
+                column_content += "  " + underline_line + "\n"
         if self.table.custom_tex_lines["after-multicolumns"]:
             for line in self.table.custom_tex_lines["after-multicolumns"]:
                 header += "  " + line + "\n"
