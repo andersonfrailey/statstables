@@ -65,6 +65,8 @@ class Table(ABC):
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
         self.longtable = longtable
+        self.panel_label = None
+        self.panel_label_alignment = "l"
 
     def reset_params(self, restore_to_defaults=False) -> None:
         """
@@ -728,6 +730,18 @@ class Table(ABC):
         assert isinstance(name, str), "index_name must be a string"
         self._index_name = name
 
+    @property
+    def panel_label(self) -> str | None:
+        """
+        Labeled used if the table is part of a panel
+        """
+        return self._panel_label
+
+    @panel_label.setter
+    def panel_label(self, label: str | None):
+        assert isinstance(label, str) or label is None
+        self._panel_label = label
+
 
 class GenericTable(Table):
     """
@@ -883,6 +897,8 @@ class MeanDifferenceTable(Table):
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
         self.longtable = longtable
+        self.panel_label = None
+        self.panel_label_alignment = "l"
 
     def reset_params(self, restore_to_defaults=False):
         super().reset_params(restore_to_defaults)
@@ -1211,6 +1227,8 @@ class ModelTable(Table):
         self.caption = caption
         self.index_name = index_name
         self.longtable = longtable
+        self.panel_label = None
+        self.panel_label_alignment = "l"
         self.default_formatter = self._default_formatter
         if default_formatter is not None:
             self.default_formatter = default_formatter
@@ -1486,13 +1504,13 @@ class PanelTable:
     ):
         for table in panels:
             assert isinstance(table, Table)
-        npanels = len(panels)
+        self.npanels = len(panels)
         nlabels = len(panel_labels)
         if len(panels) > len(panel_labels):
-            msg = f"There are {npanels} but only {nlabels} labels. Each panel must have a lable"
+            msg = f"There are {self.npanels} but only {nlabels} labels. Each panel must have a lable"
             raise AssertionError(msg)
-        elif npanels < nlabels:
-            msg = f"There are {nlabels} labels but only {npanels} panels. Each label must be associated with a panel"
+        elif self.npanels < nlabels:
+            msg = f"There are {nlabels} labels but only {self.npanels} panels. Each label must be associated with a panel"
             raise AssertionError(msg)
         valid_enum_types = ["alpha_upper", "alpha_lower", "int", "roman", None]
         assert (
@@ -1521,13 +1539,24 @@ class PanelTable:
         for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
             # if it is not the first table, turn off double top rule
             if i != 0:
-                table.double_top_rule = False
+                table.table_params["double_top_rule"] = False
             # add multicolumn to the table
-            lable_str = f"Panel {self.label_char}) {label}"
+            label_str = f"Panel {self.label_char}: {label}"
+            table.panel_label = label_str
+            table.panel_label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
             _tex_str = table.render_latex(only_tabular=True)
-            if self.enumerate_type is not None:
-                _tex_str = self._modify_latex(table=table, label=lable_str)
-            tex_str += _tex_str
+            if i < self.npanels - 1:
+                # add space between previous panel and label for next one
+                # except for the very last panel
+                _tex_str = _tex_str.replace(
+                    "  \\bottomrule\n\\end{tabularx}\n",
+                    "  \\bottomrule\\\\\n\\end{tabularx}\n",
+                )
+            tex_str += "\n" + _tex_str
+            # _tex_str = table.render_latex(only_tabular=True)
+            # if self.enumerate_type is not None:
+            #     _tex_str = self._modify_latex(table=table, label=lable_str)
+            # tex_str += _tex_str
             self._increment_label_char()
 
         if not outfile:

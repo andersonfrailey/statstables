@@ -3,6 +3,8 @@
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage{longtable}
+\usepackage{subcaption}
+\usepackage{tabularx}
 
 
 \begin{document}
@@ -24,6 +26,12 @@ You can reference tables \ref{table:differencesinmeans} and \ref{table:summaryta
 \end{table}
 
 \input{wage_table.tex}
+
+\begin{table}
+    \centering
+    \caption{Panel Table}
+    \input{panel.tex}
+\end{table}
 
 \pagebreak
 \input{longtable.tex}

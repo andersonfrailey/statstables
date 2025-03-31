@@ -53,6 +53,14 @@ class LatexRenderer(Renderer):
         "center": "c",
         "right": "r",
     }
+    TABULARX_ALIGNMENTS = {
+        "l": r">{\raggedright\arraybackslash}",
+        "c": r">{\centering\arraybackslash}",
+        "r": r">{\raggedleft\arraybackslash}",
+        "left": r">{\raggedright\arraybackslash}",
+        "center": r">{\centering\arraybackslash}",
+        "right": r">{\raggedleft\arraybackslash}",
+    }
 
     def __init__(self, table):
         self.table = table
@@ -81,13 +89,21 @@ class LatexRenderer(Renderer):
                     header += "  \\label{" + self.table.label + "}\n"
 
         # alignment for the individual columns
-        content_columns = self.calign * self.table.ncolumns
+        col_alignments = self.calign * self.table.ncolumns
+        index_alignment = self.ialign
+        # use the tabularx X columns for panel tables so they end up the same size
+        if self.table.panel_label is not None:
+            index_alignment = self.TABULARX_ALIGNMENTS[self.ialign] + "X"
+            calign = self.TABULARX_ALIGNMENTS[self.calign] + "X"
+            col_alignments = calign * self.table.ncolumns
         if self.table.table_params["include_index"]:
-            content_columns = self.ialign + content_columns
+            col_alignments = index_alignment + col_alignments
         begin = "\\begin{tabular}{"
         if self.table.longtable:
             begin = "\\begin{longtable}{"
-        header += begin + content_columns + "}\n"
+        if self.table.panel_label is not None:
+            begin = "\\begin{tabularx}{\\textwidth}{"
+        header += begin + col_alignments + "}\n"
         # add caption for longtables
         if (
             self.table.table_params["caption_location"] == "top"
@@ -98,6 +114,15 @@ class LatexRenderer(Renderer):
 
             if self.table.label is not None:
                 header += "  \\label{" + self.table.label + "}\n"
+        if self.table.panel_label is not None:
+            n = len(self.table.columns) + self.table.table_params["include_index"]
+            header += (
+                f"  \\multicolumn{{{n}}}"
+                + f"{{{self.table.panel_label_alignment}}}"
+                + f"{{{self.table.panel_label}}}"
+                + r"\\"
+                + "\n"
+            )
         header += "  \\toprule\n"
         if self.table.table_params["double_top_rule"]:
             header += "  \\toprule\n"
@@ -233,7 +258,10 @@ class LatexRenderer(Renderer):
                     footer += "  \\label{" + self.table.label + "}\n"
             footer += "\\end{longtable}\n"
         else:
-            footer += "\\end{tabular}\n"
+            end = "\\end{tabular}\n"
+            if self.table.panel_label is not None:
+                end = "\\end{tabularx}\n"
+            footer += end
         if not only_tabular:
             if self.table.table_params["caption_location"] == "bottom":
                 if self.table.caption is not None:
