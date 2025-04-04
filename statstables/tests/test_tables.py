@@ -132,9 +132,47 @@ def test_long_table():
     expected_tex = Path(CUR_PATH, "..", "..", "longtable.tex").read_text()
 
     try:
-        assert longtable_tex == expected_tex, "longtable expected output has changed"
+        assert longtable_tex == expected_tex
         temp_path.unlink()
     except AssertionError as e:
         msg = f"longtable expected output has changed. New output in {str(temp_path)}"
         Path(CUR_PATH, "..", "..", "longtableactual.tex").write_text(longtable_tex)
+        raise e
+
+
+def test_panel_table():
+    fake = Faker()
+    Faker.seed(202)
+    panela_df = pd.DataFrame(
+        {
+            "ID": [1234, 6789, 1023, 5810, 9182],
+            "School": ["Texas", "UVA", "UMBC", "UGA", "Rice"],
+        },
+        index=[fake.name_male() for _ in range(5)],
+    )
+    panela = tables.GenericTable(
+        panela_df,
+        formatters={"ID": lambda x: f"{x}"},
+    )
+    panelb_df = pd.DataFrame(
+        {
+            "ID": [9183, 5734, 1290, 4743, 8912],
+            "School": ["Wake Forrest", "Emory", "Texas", "UVA", "Columbia"],
+        },
+        index=[fake.name_female() for _ in range(5)],
+    )
+    panelb = tables.GenericTable(panelb_df, formatters={"ID": lambda x: f"{x}"})
+    panel = tables.PanelTable([panela, panelb], ["Men", "Women"])
+
+    # save temp file for comparison
+    temp_path = Path("panel_table_actual.tex")
+    panel.render_latex(outfile=temp_path)
+    panel_tex = temp_path.read_text()
+    expected_tex = Path(CUR_PATH, "..", "..", "panel.tex").read_text()
+    try:
+        assert panel_tex == expected_tex
+        temp_path.unlink()
+    except AssertionError as e:
+        msg = f"panel table expected output has changed. New output in {str(temp_path)}"
+        Path(CUR_PATH, "..", "..", "paneltableactual.tex").write_text(panel)
         raise e
