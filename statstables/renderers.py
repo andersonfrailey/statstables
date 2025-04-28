@@ -110,10 +110,12 @@ class LatexRenderer(Renderer):
             and self.table.longtable
         ):
             if self.table.caption is not None:
-                header += "  \\caption{" + self.table.caption + "}\n"
+                header += "  \\caption{" + self.table.caption + "}"
 
             if self.table.label is not None:
-                header += "  \\label{" + self.table.label + "}\n"
+                header += "  \\label{" + self.table.label + "}"
+            if self.table.caption is not None or self.table.label is not None:
+                header += r"\\" + "\n"
         if self.table.panel_label is not None:
             n = len(self.table.columns) + self.table.table_params["include_index"]
             header += (
@@ -237,7 +239,9 @@ class LatexRenderer(Renderer):
         if self.table.custom_lines["after-footer"]:
             for line in self.table.custom_lines["after-footer"]:
                 footer += self._create_line(line)
-            footer += "  \\bottomrule\n"
+            # longtables already have a bottom rule
+            if not self.table.longtable:
+                footer += "  \\bottomrule\n"
             if st.STParams["double_bottom_rule"]:
                 footer += "  \\bottomrule\n"
         if self.table.notes:
