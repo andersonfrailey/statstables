@@ -13,4 +13,5 @@ dependencies:
     - statsmodels
     - linearmodels
     - unicodeit
+    - Faker
   

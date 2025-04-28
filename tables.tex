@@ -1,6 +1,8 @@
 % You must add \usepackage{booktabs} to your LaTex document for table to compile.
 % If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble.
 
+% If you are making a longtable, you must add \usepackage{longtable} to the preamble.
+
 \begin{table}[!ht]
   \centering
   \caption{Differences in means}
@@ -9,8 +11,8 @@
   \toprule
   \toprule
   & \multicolumn{3}{c}{Means} & \multicolumn{1}{c}{} & \multicolumn{3}{c}{Differences} \\
-  \cmidrule(lr){2-4}\cmidrule(lr){6-8} \\
-   & X & Y & Z & Overall Mean & X - Y & X - Z & Y - Z\\
+  \cmidrule(lr){2-4}\cmidrule(lr){6-8}
+   &   X & Y & Z & Overall Mean & X - Y & X - Z & Y - Z\\
    & N=100 & N=100 & N=100 & N=300 &  &  & \\
   \midrule
   A & -0.12 & -0.116 & 0.058 & -0.058 & 0.001 & -0.173 & -0.174 \\
@@ -31,8 +33,8 @@
   \toprule
   \toprule
   & \multicolumn{1}{c}{First} & \multicolumn{2}{c}{Second} \\
-  \cmidrule(lr){2-2}\cmidrule(lr){3-4} \\
-   & a & B & C\\
+  \cmidrule(lr){2-2}\cmidrule(lr){3-4}
+   &   a & B & C\\
   Example & Yes & No & Yes\\
   \midrule
   Number of Observations & 300 & 300 & 300 \\

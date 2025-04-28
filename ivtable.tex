@@ -1,13 +1,15 @@
 % You must add \usepackage{booktabs} to your LaTex document for table to compile.
 % If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble.
 
+% If you are making a longtable, you must add \usepackage{longtable} to the preamble.
+
 \begin{tabular}{lccc}
   \toprule
   \toprule
   & \multicolumn{1}{c}{OLS} & \multicolumn{2}{c}{2SLS} \\
-  \cmidrule(lr){2-2}\cmidrule(lr){3-4} \\
+  \cmidrule(lr){2-2}\cmidrule(lr){3-4}
   & \multicolumn{1}{c}{} & \multicolumn{1}{c}{First Stage} & \multicolumn{1}{c}{Second Stage} \\
-   & (1) & (2) & (3)\\
+   &   (1) & (2) & (3)\\
   \midrule
   Intercept & -0.185 & 10.237*** & 0.441 \\
    & (0.185) & (0.275) & (0.445) \\

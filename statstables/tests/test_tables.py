@@ -4,8 +4,13 @@ Tests implementation of tables
 
 import pytest
 import pandas as pd
+import numpy as np
 import statsmodels.formula.api as smf
 from statstables import tables
+from faker import Faker
+from pathlib import Path
+
+CUR_PATH = Path(__file__).resolve().parent
 
 
 def test_generic_table(data):
@@ -109,3 +114,65 @@ def test_model_table(data):
     assert "Pseudo R<sup>2</sup>" not in binary_text
 
     assert binary_table.table_params["include_index"] == True
+
+
+def test_long_table():
+    fake = Faker()
+    Faker.seed(512)
+    np.random.seed(410)
+    names = [fake.name() for _ in range(100)]
+    x1 = np.random.randint(500, 10000, 100)
+    x2 = np.random.uniform(size=100)
+    longdata = pd.DataFrame({"Names": names, "X1": x1, "X2": x2})
+    longtable = tables.GenericTable(longdata, longtable=True, include_index=False)
+    temp_path = Path("longtable_actual.tex")
+    longtable.render_latex(temp_path)
+    longtable_tex = temp_path.read_text()
+    # compare to expected output
+    expected_tex = Path(CUR_PATH, "..", "..", "longtable.tex").read_text()
+
+    try:
+        assert longtable_tex == expected_tex
+        temp_path.unlink()
+    except AssertionError as e:
+        msg = f"longtable expected output has changed. New output in {str(temp_path)}"
+        Path(CUR_PATH, "..", "..", "longtableactual.tex").write_text(longtable_tex)
+        raise e
+
+
+def test_panel_table():
+    fake = Faker()
+    Faker.seed(202)
+    panela_df = pd.DataFrame(
+        {
+            "ID": [1234, 6789, 1023, 5810, 9182],
+            "School": ["Texas", "UVA", "UMBC", "UGA", "Rice"],
+        },
+        index=[fake.name_male() for _ in range(5)],
+    )
+    panela = tables.GenericTable(
+        panela_df,
+        formatters={"ID": lambda x: f"{x}"},
+    )
+    panelb_df = pd.DataFrame(
+        {
+            "ID": [9183, 5734, 1290, 4743, 8912],
+            "School": ["Wake Forrest", "Emory", "Texas", "UVA", "Columbia"],
+        },
+        index=[fake.name_female() for _ in range(5)],
+    )
+    panelb = tables.GenericTable(panelb_df, formatters={"ID": lambda x: f"{x}"})
+    panel = tables.PanelTable([panela, panelb], ["Men", "Women"])
+
+    # save temp file for comparison
+    temp_path = Path("panel_table_actual.tex")
+    panel.render_latex(outfile=temp_path)
+    panel_tex = temp_path.read_text()
+    expected_tex = Path(CUR_PATH, "..", "..", "panel.tex").read_text()
+    try:
+        assert panel_tex == expected_tex
+        temp_path.unlink()
+    except AssertionError as e:
+        msg = f"panel table expected output has changed. New output in {str(temp_path)}"
+        Path(CUR_PATH, "..", "..", "paneltableactual.tex").write_text(panel)
+        raise e

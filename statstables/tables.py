@@ -9,7 +9,7 @@ from typing import Union, Callable
 from collections import defaultdict, ChainMap
 from pathlib import Path
 from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
-from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS
+from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS, latex_preamble
 from .parameters import TableParams, MeanDiffsTableParams, ModelTableParams
 from .cellformatting import DEFAULT_FORMATS, validate_format_dict
 
@@ -37,6 +37,7 @@ class Table(ABC):
         index_name: str = "",
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
+        longtable: bool = False,
         **kwargs,
     ):
         user_params = {
@@ -63,6 +64,9 @@ class Table(ABC):
         if default_formatter is not None:
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
+        self.longtable = longtable
+        self.panel_label = None
+        self.panel_label_alignment = "l"
 
     def reset_params(self, restore_to_defaults=False) -> None:
         """
@@ -326,7 +330,7 @@ class Table(ABC):
             A list with each element that will comprise the line. the number of
             elements of this list should equal the number of columns in the table
         location : str, optional
-            Where on the table to place the line, by default "bottom"
+            Where on the table to place the line, by default "after-body"
         label : str, optional:
             The index label for the line, by default ""
         deliminate: bool, optional
@@ -551,13 +555,13 @@ class Table(ABC):
             If an outfile is not specified, the LaTeX string will be returned.
             Otherwise None will be returned.
         """
+        # longtable environments are their own thing. They don't go in table environments
+        if self.longtable:
+            only_tabular = True
         tex_str = LatexRenderer(self).render(only_tabular=only_tabular)
         if not outfile:
             return tex_str
-        preamble = r"% You must add \usepackage{booktabs} to your LaTex document for table to compile."
-        preamble += "\n"
-        preamble += r"% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble."
-        preamble += "\n\n"
+        preamble = latex_preamble()
         tex_str = preamble + tex_str
         Path(outfile).write_text(tex_str)
         return None
@@ -616,7 +620,7 @@ class Table(ABC):
         # format the numbers, otherwise just return a string
         if isinstance(value, numbers.Number):
             if float(value).is_integer():
-                return f"{value:{thousands_sep}}"
+                return f"{value:{thousands_sep}.0f}"
             return f"{value:{thousands_sep}.{sig_digits}f}"
         return str(value)
 
@@ -652,7 +656,9 @@ class Table(ABC):
             validate_format_dict(formatted_value)
             return ChainMap(formatted_value, DEFAULT_FORMATS)
         else:
-            raise ValueError("Formatter must return a dictionary or string")
+            raise ValueError(
+                f"Formatter must return a dictionary or string. Returns {type(formatted_value)}"
+            )
 
     @abstractmethod
     def _create_rows(self) -> list[list[ChainMap]]:
@@ -724,6 +730,18 @@ class Table(ABC):
         assert isinstance(name, str), "index_name must be a string"
         self._index_name = name
 
+    @property
+    def panel_label(self) -> str | None:
+        """
+        Labeled used if the table is part of a panel
+        """
+        return self._panel_label
+
+    @panel_label.setter
+    def panel_label(self, label: str | None):
+        assert isinstance(label, str) or label is None
+        self._panel_label = label
+
 
 class GenericTable(Table):
     """
@@ -790,6 +808,7 @@ class MeanDifferenceTable(Table):
         index_name: str = "",
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
+        longtable: bool = False,
         **kwargs,
     ):
         """
@@ -864,7 +883,8 @@ class MeanDifferenceTable(Table):
         self.reset_params()
         self._get_diffs()
         self.ncolumns = self.means.shape[1]
-        self.columns = self.means.columns
+        # convert columns to strings to avoid issues with numerical groups
+        self.columns = self.means.columns.astype(str)
         self.reset_custom_features()
         self.rename_columns(column_labels)
         self.rename_index(index_labels)
@@ -876,6 +896,9 @@ class MeanDifferenceTable(Table):
         if default_formatter is not None:
             self.default_formatter = default_formatter
         self.custom_formatters(formatters)
+        self.longtable = longtable
+        self.panel_label = None
+        self.panel_label_alignment = "l"
 
     def reset_params(self, restore_to_defaults=False):
         super().reset_params(restore_to_defaults)
@@ -1025,7 +1048,7 @@ class MeanDifferenceTable(Table):
                         formatted_se = copy.copy(formatted_val)
                         # formatted_se = self._format_value(_index, col, se)
                         formatted_se["value"] = (
-                            f"({se:.{self.table_params['sig_digits']}f})"
+                            f"({se:,.{self.table_params['sig_digits']}f})"
                         )
                         sem_row.append(formatted_se)
                     except KeyError:
@@ -1044,23 +1067,25 @@ class MeanDifferenceTable(Table):
 
 
 class SummaryTable(GenericTable):
-    def __init__(self, df: pd.DataFrame, var_list: list[str], **kwargs):
+    def __init__(self, df: pd.DataFrame, var_list: list[str] | None = None, **kwargs):
+        if var_list is None:
+            var_list = df.columns
         summary_df = df[var_list].describe()
         super().__init__(summary_df, **kwargs)
-        self.reset_custom_features()
+        # self.reset_custom_features()
 
     def reset_custom_features(self):
         super().reset_custom_features()
         self.rename_index(
             {
-                "count": "Count",
+                "count": "Observations",
                 "mean": "Mean",
                 "std": "Std. Dev.",
                 "min": "Min.",
                 "max": "Max.",
             }
         )
-        self.custom_formatters({"count": lambda x: int(x)})
+        self.custom_formatters({"count": lambda x: f"{int(x):,}"})
 
 
 class ModelTable(Table):
@@ -1127,6 +1152,7 @@ class ModelTable(Table):
         formatters: dict | None = None,
         default_formatter: Callable | None = None,
         dependent_variable_name: str | None = None,
+        longtable: bool = False,
         **kwargs,
     ):
         """
@@ -1200,6 +1226,9 @@ class ModelTable(Table):
         self.label = label
         self.caption = caption
         self.index_name = index_name
+        self.longtable = longtable
+        self.panel_label = None
+        self.panel_label_alignment = "l"
         self.default_formatter = self._default_formatter
         if default_formatter is not None:
             self.default_formatter = default_formatter
@@ -1445,8 +1474,167 @@ class ModelTable(Table):
 
 class PanelTable:
     """
-    Merge two tables together. Not implemented yet
+    Merge multiple tables together. Not implemented yet
     """
 
-    def __init__(self, panels: list[Table]):
-        pass
+    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
+    ALIGNMENTS = {
+        "l": "l",
+        "c": "c",
+        "r": "r",
+        "left": "l",
+        "center": "c",
+        "right": "r",
+    }
+    ASCII_ALIGNMENTS = {
+        "l": "<",
+        "c": "^",
+        "r": ">",
+        "left": "<",
+        "center": "^",
+        "right": ">",
+    }
+
+    def __init__(
+        self,
+        panels: list[Table],
+        panel_labels: list[str],
+        enumerate_type: str | None = "alpha_upper",
+        panel_label_alignment: str = "l",
+    ):
+        for table in panels:
+            assert isinstance(table, Table)
+        self.npanels = len(panels)
+        nlabels = len(panel_labels)
+        if len(panels) > len(panel_labels):
+            msg = f"There are {self.npanels} but only {nlabels} labels. Each panel must have a lable"
+            raise AssertionError(msg)
+        elif self.npanels < nlabels:
+            msg = f"There are {nlabels} labels but only {self.npanels} panels. Each label must be associated with a panel"
+            raise AssertionError(msg)
+        valid_enum_types = ["alpha_upper", "alpha_lower", "int", "roman", None]
+        assert (
+            enumerate_type in valid_enum_types
+        ), f"{enumerate_type} is invalid. Must be in {valid_enum_types}"
+        self.panels = panels
+        self.panel_labels = panel_labels
+        self.enumerate_type = enumerate_type
+        assert panel_label_alignment in self.VALID_ALIGNMENTS
+        self.panel_label_alignment = panel_label_alignment
+
+    def render_latex(self, outfile) -> str | None:
+        # assign multicolumns to each table
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+        tex_str = ""
+        for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
+            # if it is not the first table, turn off double top rule
+            if i != 0:
+                table.table_params["double_top_rule"] = False
+            # add multicolumn to the table
+            label_str = f"Panel {self.label_char}: {label}"
+            table.panel_label = label_str
+            table.panel_label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
+            _tex_str = table.render_latex(only_tabular=True)
+            if i < self.npanels - 1:
+                # add space between previous panel and label for next one
+                # except for the very last panel
+                _tex_str = _tex_str.replace(
+                    "  \\bottomrule\n\\end{tabularx}\n",
+                    "  \\bottomrule\\\\\n\\end{tabularx}\n",
+                )
+            tex_str += "\n" + _tex_str
+            # _tex_str = table.render_latex(only_tabular=True)
+            # if self.enumerate_type is not None:
+            #     _tex_str = self._modify_latex(table=table, label=lable_str)
+            # tex_str += _tex_str
+            self._increment_label_char()
+
+        if not outfile:
+            return tex_str
+        preamble = latex_preamble()
+        tex_str = preamble + tex_str
+        Path(outfile).write_text(tex_str)
+        return None
+
+    def render_ascii(self) -> str:
+        # assign multicolumns to each table
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+        # get all the table widths to know how large to make panels
+        renderers = []
+        max_width = 0
+        for table in self.panels:
+            renderer = ASCIIRenderer(table)
+            renderer._get_table_widths()
+            table_size = renderer._len + (2 * renderer._border_len)
+            max_width = max(max_width, table_size)
+
+        # loop through the tables and actually make them. add all together for panels
+        out_str = ""
+        for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
+            # if it is not the first table, turn off double top rule
+            if i != 0:
+                table.double_top_rule = False
+            # add multicolumn to the table
+            _label = f"Panel {self.label_char}) {label}"
+            label_align = self.ASCII_ALIGNMENTS[self.panel_label_alignment]
+            label_str = f"{_label:{label_align}{max_width}}\n"
+            table_str = table.render_ascii()
+            out_str += label_str + table_str + "\n"
+            self._increment_label_char()
+
+        return out_str
+
+    def _modify_latex(self, table: Table, label: str):
+        tex_str = table.render_latex(only_tabular=True)
+        out_str = tex_str.replace("\\begin{tabular}\n", "")
+        new_start = "\\begin{tabular}\n"
+        ncols = len(table.columns) + int(table.table_params["include_index"])
+        label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
+        new_start += (
+            "  \\multicolumn{"
+            + f"{ncols}"
+            + "}"
+            + f"{{{label_alignment}}}"
+            + f"{{{label}}}"
+            + r"\\"
+            + "\n"
+        )
+        return new_start + out_str
+
+    def _increment_label_char(self):
+        """
+        Increment the label on each panel
+        """
+        if self.enumerate_type is None:
+            pass
+        # roman numerals not implemented yet
+        elif self.enumerate_type == "roman":
+            pass
+        else:
+            self.label_char = chr(ord(self.label_char) + 1)
+
+    def __str__(self) -> str:
+        return self.render_ascii()
+
+    def __repr__(self) -> str:
+        return self.render_ascii()

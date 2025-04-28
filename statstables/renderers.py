@@ -53,6 +53,14 @@ class LatexRenderer(Renderer):
         "center": "c",
         "right": "r",
     }
+    TABULARX_ALIGNMENTS = {
+        "l": r">{\raggedright\arraybackslash}",
+        "c": r">{\centering\arraybackslash}",
+        "r": r">{\raggedleft\arraybackslash}",
+        "left": r">{\raggedright\arraybackslash}",
+        "center": r">{\centering\arraybackslash}",
+        "right": r">{\raggedleft\arraybackslash}",
+    }
 
     def __init__(self, table):
         self.table = table
@@ -63,6 +71,7 @@ class LatexRenderer(Renderer):
         out = self.generate_header(only_tabular)
         out += self.generate_body()
         out += self.generate_footer(only_tabular)
+        out = out.replace("−", "-")
 
         return out
 
@@ -72,23 +81,61 @@ class LatexRenderer(Renderer):
             header += "\\begin{table}[!ht]\n  \\centering\n"
 
             if self.table.table_params["caption_location"] == "top":
-                if self.table.caption is not None:
+                # if it's a long table, caption must go in longtable environment
+                if self.table.caption is not None and not self.table.longtable:
                     header += "  \\caption{" + self.table.caption + "}\n"
 
-                if self.table.label is not None:
+                if self.table.label is not None and not self.table.longtable:
                     header += "  \\label{" + self.table.label + "}\n"
 
-        content_columns = self.calign * self.table.ncolumns
+        # alignment for the individual columns
+        col_alignments = self.calign * self.table.ncolumns
+        index_alignment = self.ialign
+        # use the tabularx X columns for panel tables so they end up the same size
+        if self.table.panel_label is not None:
+            index_alignment = self.TABULARX_ALIGNMENTS[self.ialign] + "X"
+            calign = self.TABULARX_ALIGNMENTS[self.calign] + "X"
+            col_alignments = calign * self.table.ncolumns
         if self.table.table_params["include_index"]:
-            content_columns = self.ialign + content_columns
-        header += "\\begin{tabular}{" + content_columns + "}\n"
+            col_alignments = index_alignment + col_alignments
+        begin = "\\begin{tabular}{"
+        if self.table.longtable:
+            begin = "\\begin{longtable}{"
+        if self.table.panel_label is not None:
+            begin = "\\begin{tabularx}{\\textwidth}{"
+        header += begin + col_alignments + "}\n"
+        # add caption for longtables
+        if (
+            self.table.table_params["caption_location"] == "top"
+            and self.table.longtable
+        ):
+            if self.table.caption is not None:
+                header += "  \\caption{" + self.table.caption + "}"
+
+            if self.table.label is not None:
+                header += "  \\label{" + self.table.label + "}"
+            if self.table.caption is not None or self.table.label is not None:
+                header += r"\\" + "\n"
+        if self.table.panel_label is not None:
+            n = len(self.table.columns) + self.table.table_params["include_index"]
+            header += (
+                f"  \\multicolumn{{{n}}}"
+                + f"{{{self.table.panel_label_alignment}}}"
+                + f"{{{self.table.panel_label}}}"
+                + r"\\"
+                + "\n"
+            )
         header += "  \\toprule\n"
-        if st.STParams["double_top_rule"]:
+        if self.table.table_params["double_top_rule"]:
             header += "  \\toprule\n"
+        column_content = (
+            ""  # created for storing column info that's repeated in a longtable
+        )
         for col, spans, underline in self.table._multicolumns:
             # TODO: convert the line below to allow for labeling each multicolumn
             # header += ("  " + self.table.index_name + " & ") * self.table.table_params['include_index']
             header += "  & " * self.table.table_params["include_index"]
+            column_content += "  & " * self.table.table_params["include_index"]
             underline_line = ""
             underline_start = self.table.table_params["include_index"] + 1
             mcs = []
@@ -106,29 +153,60 @@ class LatexRenderer(Renderer):
                     )
                     underline_start += s
             header += " & ".join(mcs) + " \\\\\n"
+            column_content += " & ".join(mcs) + " \\\\\n"
             if underline:
-                header += "  " + underline_line + " \\\\\n"
+                header += "  " + underline_line + "\n"
+                column_content += "  " + underline_line + "\n"
         if self.table.custom_tex_lines["after-multicolumns"]:
             for line in self.table.custom_tex_lines["after-multicolumns"]:
                 header += "  " + line + "\n"
+                column_content += "  " + line + "\n"
         if self.table.table_params["show_columns"]:
             header += ("  " + self.table.index_name + " & ") * self.table.table_params[
                 "include_index"
             ]
-            header += " & ".join(
+            column_content += (
+                "  " + self.table.index_name + " & "
+            ) * self.table.table_params["include_index"]
+            header += "  " + " & ".join(
+                [
+                    self._escape(self.table._column_labels.get(col, col))
+                    for col in self.table.columns
+                ]
+            )
+            column_content += " & ".join(
                 [
                     self._escape(self.table._column_labels.get(col, col))
                     for col in self.table.columns
                 ]
             )
             header += "\\\\\n"
+            column_content += "\\\\\n"
         if self.table.custom_tex_lines["after-columns"]:
             for line in self.table.custom_tex_lines["after-columns"]:
                 header += "  " + line + "\n"
+                column_content += "  " + line + "\n"
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
                 header += self._create_line(line)
+                column_content += self._create_line(line)
         header += "  \\midrule\n"
+
+        if self.table.longtable:
+            header += "  \\endfirsthead\n\n"
+
+            # define columns for other heads
+            # header += "\\\\\n"
+            header += "  \\toprule\n"
+            if self.table.table_params["double_top_rule"]:
+                header += "  \\toprule\n"
+            header += "  " + column_content + "\n"
+            header += "  \\midrule\n  \\endhead\n\n  \\midrule\n"
+            n = len(self.table.columns) + (1 * self.table.table_params["include_index"])
+            header += (
+                "  \\multicolumn{" + f"{n}" + r"}{r}{Continued on next page} \\" + "\n"
+            )
+            header += "  \\midrule\n  \\endfoot\n\n  \\bottomrule\n  \\endlastfoot \n\n"
 
         return header
 
@@ -161,7 +239,9 @@ class LatexRenderer(Renderer):
         if self.table.custom_lines["after-footer"]:
             for line in self.table.custom_lines["after-footer"]:
                 footer += self._create_line(line)
-            footer += "  \\bottomrule\n"
+            # longtables already have a bottom rule
+            if not self.table.longtable:
+                footer += "  \\bottomrule\n"
             if st.STParams["double_bottom_rule"]:
                 footer += "  \\bottomrule\n"
         if self.table.notes:
@@ -173,7 +253,19 @@ class LatexRenderer(Renderer):
                 _note = self._escape(note) if escape else note
                 footer += "{{" + "\\small \\textit{" + _note + "}}}\\\\\n"
 
-        footer += "\\end{tabular}\n"
+        if self.table.longtable:
+            if self.table.table_params["caption_location"] == "bottom":
+                if self.table.caption is not None:
+                    footer += "  \\caption{" + self.table.caption + "}\n"
+
+                if self.table.label is not None:
+                    footer += "  \\label{" + self.table.label + "}\n"
+            footer += "\\end{longtable}\n"
+        else:
+            end = "\\end{tabular}\n"
+            if self.table.panel_label is not None:
+                end = "\\end{tabularx}\n"
+            footer += end
         if not only_tabular:
             if self.table.table_params["caption_location"] == "bottom":
                 if self.table.caption is not None:
@@ -244,6 +336,8 @@ class HTMLRenderer(Renderer):
         out = self.generate_header(convert_latex=convert_latex)
         out += self.generate_body(convert_latex=convert_latex)
         out += self.generate_footer(convert_latex=convert_latex)
+        # sometimes python uses the wrong encoding for a minus sign/hyphen. Accounts for that
+        out = out.replace("−", "-")
         return out
 
     def generate_header(self, convert_latex=True):
@@ -402,7 +496,7 @@ class HTMLRenderer(Renderer):
             _id = formatting_dict["id"]
             cell += f' id="{_id}"'
         # cell style section
-        style = f' style="text-align:{alignment};'
+        style = f' style="text-align: {alignment};'
         if formatting_dict["color"]:
             style += f" color: {formatting_dict['color']};"
         # close out the attributes section of the code
@@ -454,6 +548,7 @@ class ASCIIRenderer(Renderer):
         out = self.generate_header(convert_latex=convert_latex)
         out += self.generate_body(convert_latex=convert_latex)
         out += self.generate_footer(convert_latex=convert_latex)
+        out = out.replace("−", "-")
         return out
 
     def generate_header(self, convert_latex=True) -> str:
@@ -501,9 +596,11 @@ class ASCIIRenderer(Renderer):
             _index_name = self.table.index_name
             if convert_latex:
                 _index_name = replace_latex(_index_name)
-            header += (
-                f"{_index_name:^{self.max_index_name_cell_size}}"
-            ) * self.table.table_params["include_index"]
+            _size = self.max_index_name_cell_size
+            _align = self.ialign
+            header += (f"{_index_name:{_align}{_size}}") * self.table.table_params[
+                "include_index"
+            ]
             for col in self.table.columns:
                 _col = self.table._column_labels.get(col, col)
                 if convert_latex:

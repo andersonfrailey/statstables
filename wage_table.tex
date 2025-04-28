@@ -1,19 +1,21 @@
 % You must add \usepackage{booktabs} to your LaTex document for table to compile.
 % If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble.
 
+% If you are making a longtable, you must add \usepackage{longtable} to the preamble.
+
 \begin{table}[!ht]
   \centering
 \begin{tabular}{lccc}
   \toprule
   \toprule
   & \multicolumn{3}{c}{Dependent Variable: Log(Wage)} \\
-  \cmidrule(lr){2-4} \\
-   & (1) & (2) & (3)\\
+  \cmidrule(lr){2-4}
+   &   (1) & (2) & (3)\\
   \midrule
   \$\textbackslash alpha\$ & 0.092 & 0.023 & 1.871*** \\
    & (0.078) & (0.151) & (0.038) \\
-  Experience & \textbf{\textit{\textcolor{blue}{ 0.067***}}} & \textbf{\textit{\textcolor{blue}{ 0.106***}}} &  \\
-   & \textbf{\textit{\textcolor{blue}{(0.014)}}} & \textbf{\textit{\textcolor{blue}{(0.015)}}} &  \\
+  Experience & \textbf{\textit{\textcolor{green}{ 0.067***}}} & \textbf{\textit{\textcolor{green}{ 0.106***}}} &  \\
+   & \textbf{\textit{\textcolor{green}{(0.014)}}} & \textbf{\textit{\textcolor{green}{(0.015)}}} &  \\
   Experience Squared & \textbf{\textit{\textcolor{red}{-0.002***}}} & \textbf{\textit{\textcolor{red}{-0.005***}}} & \textbf{\textit{\textcolor{red}{-0.005***}}} \\
    & \textbf{\textit{\textcolor{red}{(0.001)}}} & \textbf{\textit{\textcolor{red}{(0.001)}}} & \textbf{\textit{\textcolor{red}{(0.001)}}} \\
   Union & 0.182*** & 0.106*** & 0.080*** \\
