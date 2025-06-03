@@ -1,7 +1,5 @@
 numpy
 pandas
 scipy
-statsmodels
-linearmodels
 unicodeit
 Faker
