@@ -136,6 +136,7 @@ def test_long_table():
         temp_path.unlink()
     except AssertionError as e:
         msg = f"longtable expected output has changed. New output in {str(temp_path)}"
+        print(msg)
         Path(CUR_PATH, "..", "..", "longtableactual.tex").write_text(longtable_tex)
         raise e
 

@@ -2,29 +2,8 @@
 import statstables as st
 from .tables import Table
 from abc import ABC, abstractmethod
-from typing import Any, TypeAlias
+from typing import Any
 from dataclasses import dataclass
-from statsmodels.base.wrapper import ResultsWrapper
-from statsmodels.regression.linear_model import RegressionResultsWrapper
-from statsmodels.discrete.discrete_model import BinaryResultsWrapper
-from linearmodels.iv.results import IVResults, OLSResults
-from linearmodels.panel.results import (
-    PanelEffectsResults,
-    PanelResults,
-    RandomEffectsResults,
-)
-
-ModelTypes: TypeAlias = (
-    ResultsWrapper
-    | RegressionResultsWrapper
-    | IVResults
-    | OLSResults
-    | PanelEffectsResults
-    | PanelResults
-    | RandomEffectsResults
-    | BinaryResultsWrapper
-    | Any
-)
 
 # model stats that should always be formatted as integers
 INT_VARS = ["observations", "ngroups"]
@@ -32,7 +11,7 @@ INT_VARS = ["observations", "ngroups"]
 
 @dataclass
 class ModelData(ABC):
-    model: ModelTypes
+    model: Any
 
     def __post_init__(self):
         self.data = {}
@@ -83,7 +62,6 @@ STATSMODELS_MAP = {
 
 @dataclass
 class StatsModelsData(ModelData):
-
     def __post_init__(self):
         super().__post_init__()
         self.summary_parameters = [
@@ -128,7 +106,6 @@ LINEAR_MODELS_MAP = {
 
 @dataclass
 class LinearModelsData(ModelData):
-
     def __post_init__(self):
         super().__post_init__()
         self.summary_parameters = [
