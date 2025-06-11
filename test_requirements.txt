@@ -5,3 +5,4 @@ unicodeit
 statsmodels
 linearmodels
 pyfixest
+faker
