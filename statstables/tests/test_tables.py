@@ -6,9 +6,16 @@ import pytest
 import pandas as pd
 import numpy as np
 import statsmodels.formula.api as smf
-from statstables import tables
+import pyfixest as pf
+from linearmodels.datasets import mroz
+from linearmodels.iv import IV2SLS
+from linearmodels.datasets import wage_panel
+from linearmodels.panel import PooledOLS, RandomEffects, PanelOLS
+from statsmodels.api import add_constant
+from statstables import tables, modeltables, SupportedModels
 from faker import Faker
 from pathlib import Path
+from dataclasses import dataclass
 
 CUR_PATH = Path(__file__).resolve().parent
 
@@ -94,7 +101,7 @@ def test_mean_differences_table(data):
     assert table.table_params["include_index"] == True
 
 
-def test_model_table(data):
+def test_model_table_statsmodels(data):
     mod1 = smf.ols("A ~ B + C -1", data=data).fit()
     mod2 = smf.ols("A ~ B + C", data=data).fit()
     mod_table = tables.ModelTable(models=[mod1, mod2])
@@ -114,6 +121,102 @@ def test_model_table(data):
     assert "Pseudo R<sup>2</sup>" not in binary_text
 
     assert binary_table.table_params["include_index"] == True
+
+
+def test_model_table_linearmodels():
+    """
+    Test model table with linear models results
+    """
+    # IV results
+    data = mroz.load()
+    data = data.dropna()
+    data = add_constant(data, has_constant="add")
+    iv = IV2SLS(np.log(data.wage), data[["const"]], data.educ, data.fatheduc).fit(
+        cov_type="unadjusted"
+    )
+    ivtable = tables.ModelTable(models=[iv.first_stage.individual["educ"], iv])
+    ivtable.rename_covariates(
+        {
+            "const": "Intercept",
+            "educ": "Education",
+            "fatheduc": "Father Education",
+        }
+    )
+    ivtable.parameter_order(["const", "fatheduc", "educ"])
+
+    # panel and random effects models
+    data = wage_panel.load()
+    year = pd.Categorical(data.year)
+    data = data.set_index(["nr", "year"])
+    data["year"] = year
+    exog_vars = [
+        "black",
+        "hisp",
+        "exper",
+        "expersq",
+        "married",
+        "educ",
+        "union",
+        "year",
+    ]
+    exog = add_constant(data[exog_vars])
+    pooled_mod = PooledOLS(data.lwage, exog).fit()
+    random_mod = RandomEffects(data.lwage, exog).fit()
+    exog_vars = [
+        "expersq",
+        "union",
+        "married",
+    ]
+    panel_exog = add_constant(data[exog_vars])
+    panel_mod = PanelOLS(
+        data.lwage, panel_exog, entity_effects=True, time_effects=True
+    ).fit()
+    panel_table = tables.ModelTable([pooled_mod, random_mod, panel_mod])
+    panel_table.dependent_variable_name = "Log(Wage)"
+    panel_table.rename_covariates(
+        {
+            "const": "Intercept",
+            "exper": "Experience",
+            "expersq": "Experience Squared",
+            "union": "Union",
+            "married": "Married",
+            "black": "Black",
+        }
+    )
+    panel_table.parameter_order(
+        ["const", "exper", "expersq", "union", "married", "black"]
+    )
+
+
+def test_model_table_pyfixest():
+    data = pf.get_data()
+    feols = pf.feols("Y ~ X1 | f1 + f2", data=data)
+    poisson_data = pf.get_data(model="Fepois")
+    fepois = pf.fepois("Y ~ X1 + X2 | f1 + f2", data=poisson_data)
+    tables.ModelTable([feols, fepois])
+
+
+def test_custom_model_table():
+    # test adding a custom model
+    @dataclass
+    class CustomTable(modeltables.ModelData):
+        def __post_init__(self):
+            super().__post_init__()
+            ...
+
+        def pull_params(self):
+            pass
+
+    SupportedModels["custom_model"] = CustomTable
+
+    # test bad model instance
+    @dataclass
+    class BadCustomTable:
+        def __post__init(self):
+            ...
+
+    with pytest.raises(AssertionError):
+        SupportedModels["bad_model"] = BadCustomTable
 
 
 def test_long_table():
@@ -169,11 +272,12 @@ def test_panel_table():
     temp_path = Path("panel_table_actual.tex")
     panel.render_latex(outfile=temp_path)
     panel_tex = temp_path.read_text()
+    temp_path.unlink()
     expected_tex = Path(CUR_PATH, "..", "..", "panel.tex").read_text()
     try:
         assert panel_tex == expected_tex
-        temp_path.unlink()
     except AssertionError as e:
         msg = f"panel table expected output has changed. New output in {str(temp_path)}"
-        Path(CUR_PATH, "..", "..", "paneltableactual.tex").write_text(panel)
+        print(msg)
+        Path(CUR_PATH, "..", "..", "paneltableactual.tex").write_text(panel_tex)
         raise e

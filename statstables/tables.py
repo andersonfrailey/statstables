@@ -1203,15 +1203,8 @@ class ModelTable(Table):
         dep_vars = []
         # pull the parameters from each model
         for mod in models:
-            try:
-                mod_obj = st.SupportedModels[mod.__class__.__name__](mod)
-                self.models.append(mod_obj)
-            except KeyError as e:
-                msg = (
-                    f"{type(mod)} is unsupported. To use custom models, "
-                    "add them to the `st.SupportedModels` dictionary."
-                )
-                raise KeyError(msg) from e
+            mod_obj = st.SupportedModels[str(type(mod))](mod)
+            self.models.append(mod_obj)
             self.params.update(mod_obj.param_labels)
             dep_vars.append(mod_obj.dependent_variable)
 
