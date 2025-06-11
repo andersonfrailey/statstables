@@ -47,6 +47,10 @@ test = [
     "pyfixest"
 ]
 
+dev = [
+    "statstables[test]"
+]
+
 [project.urls]
 Homepage = "https://github.com/andersonfrailey/statstables"
 Issues = "https://github.com/andersonfrailey/statstables/issues"
