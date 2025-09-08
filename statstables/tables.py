@@ -3,6 +3,8 @@ import numbers
 import pandas as pd
 import numpy as np
 import statstables as st
+import narwhals as nw
+from narwhals.typing import IntoDataFrame
 from abc import ABC, abstractmethod
 from scipy import stats
 from typing import Union, Callable
@@ -749,11 +751,11 @@ class GenericTable(Table):
     column/index naming
     """
 
-    def __init__(self, df: pd.DataFrame | pd.Series, **kwargs):
-        self.df = df
-        self.ncolumns = df.shape[1]
-        self.columns = df.columns
-        self.nrows = df.shape[0]
+    def __init__(self, df: IntoDataFrame, **kwargs):
+        self.df = nw.from_native(df).to_pandas()
+        self.ncolumns = self.df.shape[1]
+        self.columns = self.df.columns
+        self.nrows = self.df.shape[0]
         super().__init__(**kwargs)
 
     def reset_params(self, restore_to_defaults=False):
@@ -785,7 +787,7 @@ class GenericTable(Table):
 class MeanDifferenceTable(Table):
     def __init__(
         self,
-        df: pd.DataFrame,
+        df: IntoDataFrame,
         var_list: list,
         group_var: str,
         diff_pairs: list[tuple] | None = None,
@@ -818,7 +820,7 @@ class MeanDifferenceTable(Table):
 
         Parameters
         ----------
-        df : pd.DataFrame
+        df : IntoDataFrame
             DataFrame containing the raw data to be compared
         var_list : list
             List of variables to compare means to between the groups
@@ -851,7 +853,8 @@ class MeanDifferenceTable(Table):
         }
         self.table_params = MeanDiffsTableParams(user_params)
         # TODO: allow for grouping on multiple variables
-        self.groups = df[group_var].unique()
+        self.df = nw.from_native(df).to_pandas()
+        self.groups = self.df[group_var].unique()
         self.ngroups = len(self.groups)
         self.var_list = var_list
         if self.ngroups > 2 and not diff_pairs:
@@ -861,14 +864,14 @@ class MeanDifferenceTable(Table):
         if self.ngroups < 2:
             raise ValueError("There must be at least two groups")
         self.alternative = alternative
-        self.type_gdf = df.groupby(group_var)
+        self.type_gdf = self.df.groupby(group_var)
         # adjust these to only count non-null values
         self.grp_sizes = self.type_gdf.size()
-        self.grp_sizes["Overall Mean"] = df.shape[0]
+        self.grp_sizes["Overall Mean"] = self.df.shape[0]
         self.means = self.type_gdf[var_list].mean().T
         # add toal means column to means
-        self.means["Overall Mean"] = df[var_list].mean()
-        total_sem = df[var_list].sem()
+        self.means["Overall Mean"] = self.df[var_list].mean()
+        total_sem = self.df[var_list].sem()
         total_sem.name = "Overall Mean"
         self.sem = pd.merge(
             self.type_gdf[var_list].sem().T,
@@ -1067,10 +1070,11 @@ class MeanDifferenceTable(Table):
 
 
 class SummaryTable(GenericTable):
-    def __init__(self, df: pd.DataFrame, var_list: list[str] | None = None, **kwargs):
+    def __init__(self, df: IntoDataFrame, var_list: list[str] | None = None, **kwargs):
+        self.df = nw.from_native(df).to_pandas()
         if var_list is None:
-            var_list = df.columns
-        summary_df = df[var_list].describe()
+            var_list = self.df.columns
+        summary_df = self.df[var_list].describe()
         super().__init__(summary_df, **kwargs)
         # self.reset_custom_features()
 

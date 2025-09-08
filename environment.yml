@@ -14,4 +14,5 @@ dependencies:
     - linearmodels
     - unicodeit
     - Faker
+    - narwhals
   
