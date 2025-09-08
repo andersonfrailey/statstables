@@ -5,3 +5,4 @@ statsmodels
 linearmodels
 unicodeit
 Faker
+narwhals
