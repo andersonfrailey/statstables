@@ -1,6 +1,4 @@
 # Tables that can be used to export model information
-import statstables as st
-from .tables import Table
 from abc import ABC, abstractmethod
 from typing import Any, TypeAlias
 from dataclasses import dataclass
@@ -83,7 +81,6 @@ STATSMODELS_MAP = {
 
 @dataclass
 class StatsModelsData(ModelData):
-
     def __post_init__(self):
         super().__post_init__()
         self.summary_parameters = [
@@ -128,7 +125,6 @@ LINEAR_MODELS_MAP = {
 
 @dataclass
 class LinearModelsData(ModelData):
-
     def __post_init__(self):
         super().__post_init__()
         self.summary_parameters = [

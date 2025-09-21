@@ -66,6 +66,19 @@ class LatexRenderer(Renderer):
         self.table = table
         self.ialign = self.ALIGNMENTS[self.table.table_params["index_alignment"]]
         self.calign = self.ALIGNMENTS[self.table.table_params["column_alignment"]]
+        self.start_tabular = "\\begin{tabular}{"
+        self.end_tabular = "\\end{tabular}\n"
+        if self.table.table_params["use_tabularx"]:
+            self.ialign = (
+                self.TABULARX_ALIGNMENTS[self.table.table_params["index_alignment"]]
+                + "X"
+            )
+            self.calign = (
+                self.TABULARX_ALIGNMENTS[self.table.table_params["column_alignment"]]
+                + "X"
+            )
+            self.start_tabular = "\\begin{tabularx}{\\textwidth}{"
+            self.end_tabular = "\\end{tabularx}\n"
 
     def render(self, only_tabular=False):
         out = self.generate_header(only_tabular)
@@ -92,17 +105,17 @@ class LatexRenderer(Renderer):
         col_alignments = self.calign * self.table.ncolumns
         index_alignment = self.ialign
         # use the tabularx X columns for panel tables so they end up the same size
-        if self.table.panel_label is not None:
-            index_alignment = self.TABULARX_ALIGNMENTS[self.ialign] + "X"
-            calign = self.TABULARX_ALIGNMENTS[self.calign] + "X"
-            col_alignments = calign * self.table.ncolumns
+        # if self.table.panel_label is not None:
+        #     index_alignment = self.TABULARX_ALIGNMENTS[self.ialign] + "X"
+        #     calign = self.TABULARX_ALIGNMENTS[self.calign] + "X"
+        #     col_alignments = calign * self.table.ncolumns
         if self.table.table_params["include_index"]:
             col_alignments = index_alignment + col_alignments
-        begin = "\\begin{tabular}{"
+        begin = self.start_tabular
         if self.table.longtable:
             begin = "\\begin{longtable}{"
-        if self.table.panel_label is not None:
-            begin = "\\begin{tabularx}{\\textwidth}{"
+        # if self.table.panel_label is not None:
+        #     begin = "\\begin{tabularx}{\\textwidth}{"
         header += begin + col_alignments + "}\n"
         # add caption for longtables
         if (
@@ -131,17 +144,23 @@ class LatexRenderer(Renderer):
         column_content = (
             ""  # created for storing column info that's repeated in a longtable
         )
-        for col, spans, underline in self.table._multicolumns:
+        for row in self.table._multicolumns:
             # TODO: convert the line below to allow for labeling each multicolumn
             # header += ("  " + self.table.index_name + " & ") * self.table.table_params['include_index']
-            header += "  & " * self.table.table_params["include_index"]
+            header += (
+                "  & "
+                * self.table.table_params["include_index"]
+                * (1 - row["cover_index"])
+            )
             column_content += "  & " * self.table.table_params["include_index"]
             underline_line = ""
             underline_start = self.table.table_params["include_index"] + 1
+            if row["cover_index"]:
+                underline_start -= 1
             mcs = []
-            for c, s in zip(col, spans):
-                mcs.append(f"\\multicolumn{{{s}}}{{c}}{{{c}}}")
-                if underline:
+            for c, s in zip(row["columns"], row["spans"]):
+                mcs.append(f"\\multicolumn{{{s}}}{{{row['alignment']}}}{{{c}}}")
+                if row["underline"]:
                     if c == "":
                         underline_start += s
                         continue
@@ -154,7 +173,7 @@ class LatexRenderer(Renderer):
                     underline_start += s
             header += " & ".join(mcs) + " \\\\\n"
             column_content += " & ".join(mcs) + " \\\\\n"
-            if underline:
+            if row["underline"]:
                 header += "  " + underline_line + "\n"
                 column_content += "  " + underline_line + "\n"
         if self.table.custom_tex_lines["after-multicolumns"]:
@@ -190,7 +209,8 @@ class LatexRenderer(Renderer):
             for line in self.table.custom_lines["after-columns"]:
                 header += self._create_line(line)
                 column_content += self._create_line(line)
-        header += "  \\midrule\n"
+        if self.table.table_params["show_columns"]:
+            header += "  \\midrule\n"
 
         if self.table.longtable:
             header += "  \\endfirsthead\n\n"
@@ -214,9 +234,14 @@ class LatexRenderer(Renderer):
         rows = self.table._create_rows()
         row_str = ""
         for row in rows:
-            row_str += (
-                "  " + " & ".join([self._format_value(r) for r in row]) + " \\\\\n"
-            )
+            row_str += "  "
+            for i, r in enumerate(row):
+                _r = r
+                if i == 0 and self.table.table_params["include_index"]:
+                    # opptionally escape index
+                    _r["escape"] = self.table.table_params["index_escape"]
+                row_str += " & " * (i != 0) + self._format_value(_r)
+            row_str += " \\\\\n"
         for line in self.table.custom_tex_lines["after-body"]:
             row_str += line
         for line in self.table.custom_lines["after-body"]:
@@ -262,10 +287,7 @@ class LatexRenderer(Renderer):
                     footer += "  \\label{" + self.table.label + "}\n"
             footer += "\\end{longtable}\n"
         else:
-            end = "\\end{tabular}\n"
-            if self.table.panel_label is not None:
-                end = "\\end{tabularx}\n"
-            footer += end
+            footer += self.end_tabular
         if not only_tabular:
             if self.table.table_params["caption_location"] == "bottom":
                 if self.table.caption is not None:
@@ -292,7 +314,7 @@ class LatexRenderer(Renderer):
 
         return out
 
-    def _format_value(self, formatting_dict: dict) -> str:
+    def _format_value(self, formatting_dict: dict, **kwargs) -> str:
         """
         Formats a value in the table
         """
@@ -350,26 +372,22 @@ class HTMLRenderer(Renderer):
             if convert_latex:
                 caption = replace_latex(caption)
             header += f'    <tr><th  colspan="{self.ncolumns}" style="text-align:center">{caption}</th></tr>\n'
-        for col, spans, underline in self.table._multicolumns:
+        for row in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
-                f'      <th style="text-align:{self.ialign};"></th>\n'
-            ) * self.table.table_params["include_index"]
+                (f'      <th style="text-align:{self.ialign};"></th>\n')
+                * self.table.table_params["include_index"]
+                * (1 - row["cover_index"])
+            )
             th = '<th colspan="{s}" style="text-align:{a};">{c}</th>'
-            if underline:
+            if row["underline"]:
                 th = '<th colspan="{s}" style="text-align:{a};"><u>{c}</u></th>'
-            # header += "      " + " ".join(
-            #     [
-            #         th.format(c=c, s=s, a=self.calign)
-            #         for c, s in zip(col, spans)
-            #     ]
-            # )
             header += "      "
-            for c, s in zip(col, spans):
+            for c, s in zip(row["columns"], row["spans"]):
                 _col = c
                 if convert_latex:
                     _col = replace_latex(c)
-                header += " " + th.format(c=_col, s=s, a=self.calign)
+                header += " " + th.format(c=_col, s=s, a=row["alignment"])
             header += "\n"
             header += "    </tr>\n"
         for line in self.table.custom_html_lines["after-multicolumns"]:
@@ -487,7 +505,7 @@ class HTMLRenderer(Renderer):
 
         return out
 
-    def _format_value(self, formatting_dict: dict, alignment: str) -> str:
+    def _format_value(self, formatting_dict: dict, alignment: str, **kwargs) -> str:
         cell = f"      <td"
         if formatting_dict["class"]:
             _class = formatting_dict["class"]
@@ -524,6 +542,9 @@ class ASCIIRenderer(Renderer):
         "left": "<",
         "center": "^",
         "right": ">",
+        "<": "<",
+        "^": "^",
+        ">": ">",
     }
 
     def __init__(self, table):
@@ -567,29 +588,39 @@ class ASCIIRenderer(Renderer):
                 st.STParams["ascii_header_char"] * (self._len + (2 * self._border_len))
                 + "\n"
             )
-        for col, span, underline in self.table._multicolumns:
+        for row in self.table._multicolumns:
             header += st.STParams["ascii_border_char"] + (
                 " "
                 * self.max_index_name_cell_size
                 * self.table.table_params["include_index"]
+                * (1 - row["cover_index"])
             )
-            underlines = (
-                st.STParams["ascii_border_char"]
-                + " "
-                * self.max_index_name_cell_size
-                * self.table.table_params["include_index"]
+            underlines = st.STParams[
+                "ascii_border_char"
+            ] + " " * self.max_index_name_cell_size * self.table.table_params[
+                "include_index"
+            ] * (
+                1 - row["cover_index"]
             )
 
-            for c, s in zip(col, span):
+            for c, s in zip(row["columns"], row["spans"]):
                 _size = self.max_body_cell_size * s
                 _col = c
                 if convert_latex:
                     _col = replace_latex(c)
-                header += f"{_col:^{_size}}"
+                # TODO: fix alignment
+                _align = self.ALIGNMENTS[row["alignment"]]
+                # add a pad to name for non-center alignments since underline will
+                # also have a pad. This makes the two line up
+                if _align == "<":
+                    _col = " " + _col
+                if _align == ">":
+                    _col += " "
+                header += f"{_col:{_align}{_size}}"
                 uchar = "-" if c != "" else " "
                 underlines += f"{uchar * (_size - 2):^{_size}}"
             header += f"{st.STParams['ascii_border_char']}\n"
-            if underline:
+            if row["underline"]:
                 header += underlines + f"{st.STParams['ascii_border_char']}\n"
         if self.table.table_params["show_columns"]:
             header += st.STParams["ascii_border_char"]
@@ -611,11 +642,12 @@ class ASCIIRenderer(Renderer):
         if self.table.custom_lines["after-columns"]:
             for line in self.table.custom_lines["after-columns"]:
                 header += self._create_line(line, convert_latex=convert_latex)
-        header += (
-            st.STParams["ascii_border_char"]
-            + st.STParams["ascii_mid_rule_char"] * (self._len)
-            + f"{st.STParams['ascii_border_char']}\n"
-        )
+        if self.table.table_params["show_columns"]:
+            header += (
+                st.STParams["ascii_border_char"]
+                + st.STParams["ascii_mid_rule_char"] * (self._len)
+                + f"{st.STParams['ascii_border_char']}\n"
+            )
         return header
 
     # get the length of the header lines by counting number of characters in each column
@@ -806,8 +838,8 @@ class ASCIIRenderer(Renderer):
             self.max_row_len = max(self.max_row_len, col_len)
         # get size of multicolumns
         if self.table._multicolumns:
-            for col, span, _ in self.table._multicolumns:
-                for c, s in zip(col, span):
+            for row in self.table._multicolumns:
+                for c, s in zip(row["columns"], row["spans"]):
                     # total space the multicolumn will span over based on the size
                     # of the body cells
                     span_size = self.max_body_cell_size * s
@@ -825,7 +857,7 @@ class ASCIIRenderer(Renderer):
         self._len += self.max_index_name_cell_size
         self._border_len = len(st.STParams["ascii_border_char"])
 
-    def _format_value(self, formatting_dict: dict) -> str:
+    def _format_value(self, formatting_dict: dict, **kwargs) -> str:
         return formatting_dict["value"]
 
     ##### Properties #####
