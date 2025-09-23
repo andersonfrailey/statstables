@@ -1111,7 +1111,6 @@ class SummaryTable(GenericTable):
             var_list = list(df.columns)
         summary_df = df[var_list].describe()
         super().__init__(summary_df, **kwargs)
-        # self.reset_custom_features()
 
     def reset_custom_features(self):
         super().reset_custom_features()
@@ -1122,6 +1121,9 @@ class SummaryTable(GenericTable):
                 "std": "Std. Dev.",
                 "min": "Min.",
                 "max": "Max.",
+                "25%": "25\\%",
+                "50%": "50\\%",
+                "75%": "75\\%",
             }
         )
         self.custom_formatters({"count": lambda x: f"{int(x):,}"})
