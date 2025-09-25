@@ -16,6 +16,12 @@ from statstables import tables, modeltables, SupportedModels
 from faker import Faker
 from pathlib import Path
 from dataclasses import dataclass
+from statsmodels.api import add_constant
+from statstables import tables
+from faker import Faker
+from pathlib import Path
+from linearmodels.datasets import wage_panel
+from linearmodels.panel import PooledOLS, RandomEffects, PanelOLS
 
 CUR_PATH = Path(__file__).resolve().parent
 
@@ -212,8 +218,7 @@ def test_custom_model_table():
     # test bad model instance
     @dataclass
     class BadCustomTable:
-        def __post__init(self):
-            ...
+        def __post__init(self): ...
 
     with pytest.raises(AssertionError):
         SupportedModels["bad_model"] = BadCustomTable
@@ -229,19 +234,14 @@ def test_long_table():
     longdata = pd.DataFrame({"Names": names, "X1": x1, "X2": x2})
     longtable = tables.GenericTable(longdata, longtable=True, include_index=False)
     temp_path = Path("longtable_actual.tex")
-    longtable.render_latex(temp_path)
-    longtable_tex = temp_path.read_text()
-    # compare to expected output
-    expected_tex = Path(CUR_PATH, "..", "..", "longtable.tex").read_text()
+    expected_tex = Path(CUR_PATH, "..", "..", "longtable.tex")
 
-    try:
-        assert longtable_tex == expected_tex
-        temp_path.unlink()
-    except AssertionError as e:
-        msg = f"longtable expected output has changed. New output in {str(temp_path)}"
-        print(msg)
-        Path(CUR_PATH, "..", "..", "longtableactual.tex").write_text(longtable_tex)
-        raise e
+    compare_expected_output(
+        expected_file=expected_tex,
+        actual_table=longtable,
+        render_type="tex",
+        temp_file=temp_path,
+    )
 
 
 def test_panel_table():
@@ -268,16 +268,85 @@ def test_panel_table():
     panelb = tables.GenericTable(panelb_df, formatters={"ID": lambda x: f"{x}"})
     panel = tables.PanelTable([panela, panelb], ["Men", "Women"])
 
-    # save temp file for comparison
-    temp_path = Path("panel_table_actual.tex")
-    panel.render_latex(outfile=temp_path)
-    panel_tex = temp_path.read_text()
-    temp_path.unlink()
-    expected_tex = Path(CUR_PATH, "..", "..", "panel.tex").read_text()
+    compare_expected_output(
+        expected_file=Path(CUR_PATH, "..", "..", "panel.tex"),
+        actual_table=panel,
+        render_type="tex",
+        temp_file=Path("panel_table_actual.tex"),
+    )
+
+
+def test_linear_models():
+    data = wage_panel.load()
+    year = pd.Categorical(data.year)
+    data = data.set_index(["nr", "year"])
+    data["year"] = year
+
+    data = wage_panel.load()
+    year = pd.Categorical(data.year)
+    data = data.set_index(["nr", "year"])
+    data["year"] = year
+    exog_vars = [
+        "black",
+        "hisp",
+        "exper",
+        "expersq",
+        "married",
+        "educ",
+        "union",
+        "year",
+    ]
+    exog = add_constant(data[exog_vars])
+    pooled_mod = PooledOLS(data.lwage, exog).fit()
+    random_mod = RandomEffects(data.lwage, exog).fit()
+    exog_vars = [
+        "expersq",
+        "union",
+        "married",
+    ]
+    panel_exog = add_constant(data[exog_vars])
+    panel_mod = PanelOLS(
+        data.lwage, panel_exog, entity_effects=True, time_effects=True
+    ).fit()
+    covariate_labels = {
+        # statstables will convert LaTeX to unicode when rendering HTML and ASCII tables
+        "const": r"$\alpha$",
+        "exper": "Experience",
+        "expersq": "Experience$^2$",
+        "union": "Union",
+        "married": "Married",
+        "black": "Black",
+    }
+    covariate_order = ["const", "exper", "expersq", "union", "married", "black"]
+    panel_table_long_name = tables.ModelTable(
+        [pooled_mod, random_mod, panel_mod],
+        covariate_labels=covariate_labels,
+        covariate_order=covariate_order,
+        dependent_variable_name="A Long Title That Would Look Odd",
+        dependent_var_cover_index=True,
+        dependent_var_alignment="r",
+        show_stars=False,
+        use_tabularx=True,
+    )
+    compare_expected_output(
+        expected_file=Path(CUR_PATH, "..", "..", "wage_table_long_name.tex"),
+        actual_table=panel_table_long_name,
+        render_type="tex",
+        temp_file=Path("wage_table_long_name_actual.tex"),
+    )
+
+
+def compare_expected_output(
+    expected_file: Path, actual_table: tables.Table, render_type: str, temp_file: Path
+):
+    match render_type:
+        case "tex":
+            actual_table.render_latex(temp_file)
+    actual_text = temp_file.read_text()
+    expected_text = expected_file.read_text()
     try:
-        assert panel_tex == expected_tex
+        assert actual_text == expected_text
+        temp_file.unlink()
     except AssertionError as e:
-        msg = f"panel table expected output has changed. New output in {str(temp_path)}"
-        print(msg)
-        Path(CUR_PATH, "..", "..", "paneltableactual.tex").write_text(panel_tex)
-        raise e
+        msg = f"Output has changed. New output in {str(temp_file)}"
+        raise e(msg)

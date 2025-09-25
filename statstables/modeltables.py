@@ -1,6 +1,4 @@
 # Tables that can be used to export model information
-import statstables as st
-from .tables import Table
 from abc import ABC, abstractmethod
 from typing import Any
 from dataclasses import dataclass

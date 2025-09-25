@@ -39,6 +39,9 @@ DEFAULT_TABLE_PARAMS = {
     "thousands_sep": ",",
     "include_index": True,
     "show_columns": True,
+    "column_escape": False,
+    "index_escape": False,
+    "use_tabularx": False,
 } | STParams
 
 BOOL_TABLE_PARAMS = {
@@ -48,6 +51,9 @@ BOOL_TABLE_PARAMS = {
     "ascii_double_bottom_rule",
     "include_index",
     "show_columns",
+    "column_escape",
+    "index_escape",
+    "use_tabularx",
 }
 
 STR_TABLE_PARAMS = {
@@ -69,7 +75,7 @@ INT_TABLE_PARAMS = {
 
 
 class TableParams(ChainMap):
-    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
+    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center", "^", "<", ">"]
 
     def __init__(
         self, user_params: dict, default_params: dict = DEFAULT_TABLE_PARAMS
@@ -113,19 +119,16 @@ class TableParams(ChainMap):
             assert isinstance(value, str), f"{name} must be a string"
         elif name in INT_TABLE_PARAMS:
             assert isinstance(value, int), f"{name} must be an integer"
-        # value validation
-        match name:
-            case "caption_location":
-                assert value in [
-                    "top",
-                    "bottom",
-                ], "caption_location must be 'top' or 'bottom'"
-            case "column_alignment":
-                assert (
-                    value in self.VALID_ALIGNMENTS
-                ), f"column_alignment must be in {self.VALID_ALIGNMENTS}"
-            case _:
-                ...
+        # value validation for specific types of parameters
+        if name == "caption_location":
+            assert value in [
+                "top",
+                "bottom",
+            ], "caption_location must be 'top' or 'bottom'"
+        if name.endswith("_alignment"):
+            assert (
+                value in self.VALID_ALIGNMENTS
+            ), f"{name} must be in {self.VALID_ALIGNMENTS}"
 
 
 DEFAULT_MEAN_DIFFS_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
@@ -186,6 +189,9 @@ DEFAULT_MODEL_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
     "dependent_variable": "",
     "include_index": True,
     "show_significance_levels": True,
+    "dependent_var_cover_index": False,
+    "dependent_var_alignment": "c",
+    "underline_dependent_variable_name": True,
 }
 
 BOOL_MODEL_TABLE_PARAMS = {
@@ -203,6 +209,8 @@ BOOL_MODEL_TABLE_PARAMS = {
     "show_stars",
     "show_model_type",
     "show_significance_levels",
+    "dependent_var_cover_index",
+    "underline_dependent_variable_name",
 }
 
 

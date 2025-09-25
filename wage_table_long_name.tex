@@ -1,0 +1,34 @@
+% You must add \usepackage{booktabs} to your LaTex document for table to compile.
+% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble.
+
+% If you are making a longtable, you must add \usepackage{longtable} to the preamble.
+
+\begin{table}[!ht]
+  \centering
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X}
+  \toprule
+  \toprule
+\multicolumn{4}{r}{Dependent Variable: A Long Title That Would Look Odd} \\
+  \cmidrule(lr){1-4}
+   &   (1) & (2) & (3)\\
+  \midrule
+  $\alpha$ & 0.092 & 0.023 & 1.871 \\
+   & (0.078) & (0.151) & (0.038) \\
+  Experience & 0.067 & 0.106 &  \\
+   & (0.014) & (0.015) &  \\
+  Experience$^2$ & -0.002 & -0.005 & -0.005 \\
+   & (0.001) & (0.001) & (0.001) \\
+  Union & 0.182 & 0.106 & 0.080 \\
+   & (0.017) & (0.018) & (0.019) \\
+  Married & 0.108 & 0.064 & 0.047 \\
+   & (0.016) & (0.017) & (0.018) \\
+  Black & -0.139 & -0.139 &  \\
+   & (0.024) & (0.048) &  \\
+  \midrule
+  Observations & 4,360 & 4,360 & 4,360 \\
+  N. Groups & 545 & 545 & 545 \\
+  $R^2$ & 0.189 & 0.181 & 0.022 \\
+  F Statistic & 72.459 & 68.409 & 27.959 \\
+  \bottomrule
+\end{tabularx}
+\end{table}
