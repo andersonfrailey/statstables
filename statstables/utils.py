@@ -46,6 +46,18 @@ def validate_line_location(line_location: str | None) -> None:
         )
 
 
+VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
+
+
+def validate_alignments(alignment: str) -> None:
+    if alignment not in VALID_ALIGNMENTS:
+        raise ValueError(
+            f"Invalid alignment: {alignment}. "
+            f"Valid alignments are: {VALID_ALIGNMENTS}"
+        )
+    return None
+
+
 def replace_latex(line: str) -> str:
     assert isinstance(line, str)
     # remove dollar signs used to indicate latex section
