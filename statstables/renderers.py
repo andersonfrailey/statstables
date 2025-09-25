@@ -104,18 +104,11 @@ class LatexRenderer(Renderer):
         # alignment for the individual columns
         col_alignments = self.calign * self.table.ncolumns
         index_alignment = self.ialign
-        # use the tabularx X columns for panel tables so they end up the same size
-        # if self.table.panel_label is not None:
-        #     index_alignment = self.TABULARX_ALIGNMENTS[self.ialign] + "X"
-        #     calign = self.TABULARX_ALIGNMENTS[self.calign] + "X"
-        #     col_alignments = calign * self.table.ncolumns
         if self.table.table_params["include_index"]:
             col_alignments = index_alignment + col_alignments
         begin = self.start_tabular
         if self.table.longtable:
             begin = "\\begin{longtable}{"
-        # if self.table.panel_label is not None:
-        #     begin = "\\begin{tabularx}{\\textwidth}{"
         header += begin + col_alignments + "}\n"
         # add caption for longtables
         if (
@@ -216,7 +209,6 @@ class LatexRenderer(Renderer):
             header += "  \\endfirsthead\n\n"
 
             # define columns for other heads
-            # header += "\\\\\n"
             header += "  \\toprule\n"
             if self.table.table_params["double_top_rule"]:
                 header += "  \\toprule\n"
@@ -717,7 +709,6 @@ class ASCIIRenderer(Renderer):
                     self._len + (2 * self._border_len)
                 )
         if self.table.notes:
-            # footer += "\n"
             for note, alignment, _ in self.table.notes:
                 notes = textwrap.wrap(
                     note, width=min(self._len, st.STParams["max_ascii_notes_length"])
