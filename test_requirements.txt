@@ -1,0 +1,8 @@
+numpy
+pandas
+scipy
+unicodeit
+statsmodels
+linearmodels
+pyfixest
+faker

@@ -1,28 +1,7 @@
 # Tables that can be used to export model information
 from abc import ABC, abstractmethod
-from typing import Any, TypeAlias
+from typing import Any
 from dataclasses import dataclass
-from statsmodels.base.wrapper import ResultsWrapper
-from statsmodels.regression.linear_model import RegressionResultsWrapper
-from statsmodels.discrete.discrete_model import BinaryResultsWrapper
-from linearmodels.iv.results import IVResults, OLSResults
-from linearmodels.panel.results import (
-    PanelEffectsResults,
-    PanelResults,
-    RandomEffectsResults,
-)
-
-ModelTypes: TypeAlias = (
-    ResultsWrapper
-    | RegressionResultsWrapper
-    | IVResults
-    | OLSResults
-    | PanelEffectsResults
-    | PanelResults
-    | RandomEffectsResults
-    | BinaryResultsWrapper
-    | Any
-)
 
 # model stats that should always be formatted as integers
 INT_VARS = ["observations", "ngroups"]
@@ -30,7 +9,7 @@ INT_VARS = ["observations", "ngroups"]
 
 @dataclass
 class ModelData(ABC):
-    model: ModelTypes
+    model: Any
 
     def __post_init__(self):
         self.data = {}
@@ -153,7 +132,29 @@ class LinearModelsData(ModelData):
         self.data["dependent_variable"] = self.model.summary.tables[0].data[0][1]
         self.data["fstat"] = self.model.f_statistic.stat
         self.data["fstat_pvalue"] = self.model.f_statistic.pval
-        if isinstance(
-            self.model, (PanelEffectsResults, RandomEffectsResults, PanelResults)
-        ):
+        if self.model.__class__.__name__ in [
+            "PanelEffectsResults",
+            "RandomEffectsResults",
+            "PanelResults",
+        ]:
             self.data["ngroups"] = self.model.entity_info.total
+
+
+PYFIXEST_MAP = {"params": "coef"}
+
+
+@dataclass
+class PyFixestModel(ModelData):
+    def __post_init__(self):
+        super().__post_init__()
+
+    def pull_params(self):
+        params = self.model.coef()
+        self.data["params"] = params
+        self.data["param_labels"] = set(params.index.values)
+        self.data["sterrs"] = self.model.se()
+        confint = self.model.confint()
+        self.data["cis_low"] = confint["2.5%"]
+        self.data["cis_high"] = confint["97.5%"]
+        self.data["dependent_variable"] = self.model._depvar
+        self.data["pvalues"] = self.model.pvalue()

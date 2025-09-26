@@ -1244,15 +1244,8 @@ class ModelTable(Table):
         dep_vars = []
         # pull the parameters from each model
         for mod in models:
-            try:
-                mod_obj = st.SupportedModels[type(mod)](mod)
-                self.models.append(mod_obj)
-            except KeyError as e:
-                msg = (
-                    f"{type(mod)} is unsupported. To use custom models, "
-                    "add them to the `st.SupportedModels` dictionary."
-                )
-                raise KeyError(msg) from e
+            mod_obj = st.SupportedModels[type(mod)](mod)
+            self.models.append(mod_obj)
             self.params.update(mod_obj.param_labels)
             dep_vars.append(mod_obj.dependent_variable)
 
@@ -1585,7 +1578,7 @@ class PanelTable:
         assert panel_label_alignment in self.VALID_ALIGNMENTS
         self.panel_label_alignment = panel_label_alignment
 
-    def render_latex(self, outfile) -> str | None:
+    def render_latex(self, outfile, **kwargs) -> str | None:
         # assign multicolumns to each table
         match self.enumerate_type:
             case "alpha_upper":
