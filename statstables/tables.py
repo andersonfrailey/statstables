@@ -1086,9 +1086,9 @@ class MeanDifferenceTable(Table):
                         se = self.sem.loc[_index, col]
                         formatted_se = copy.copy(formatted_val)
                         # formatted_se = self._format_value(_index, col, se)
-                        formatted_se[
-                            "value"
-                        ] = f"({se:,.{self.table_params['sig_digits']}f})"
+                        formatted_se["value"] = (
+                            f"({se:,.{self.table_params['sig_digits']}f})"
+                        )
                         sem_row.append(formatted_se)
                     except KeyError:
                         sem_row.append(self._format_value(_index, col, ""))
@@ -1244,7 +1244,7 @@ class ModelTable(Table):
         dep_vars = []
         # pull the parameters from each model
         for mod in models:
-            mod_obj = st.SupportedModels[str(type(mod))](mod)
+            mod_obj = st.SupportedModels[type(mod)](mod)
             self.models.append(mod_obj)
             self.params.update(mod_obj.param_labels)
             dep_vars.append(mod_obj.dependent_variable)

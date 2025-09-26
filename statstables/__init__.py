@@ -26,9 +26,23 @@ class SupportedModelsClass(dict):
         super().__init__()
         self.models = models
 
+    def add_model(self, model_results_class: Any, output_class: Any) -> None:
+        """
+        Add a custom model without giving it a default name
+
+        Parameters
+        ----------
+        model_results_class : Any
+            The model class you want to add
+
+        Returns
+        -------
+        None
+        """
+        self[type(model_results_class)] = output_class
+
     @staticmethod
     def _keyname(key: str):
-        # return f"<class '{item}'>"
         return key.replace("<class '", "").replace("'>", "")
 
     def __setitem__(self, key: str, value: Any):
@@ -37,11 +51,14 @@ class SupportedModelsClass(dict):
         self.models[key] = value
 
     def __getitem__(self, key: str):
+        # custom models will be saved with their type as the key, but the natively
+        # supported models are passed in as strings (see initialization below)
+        # so they will be found in the first exception
         try:
-            return self.models[key]
+            return self.models[type(key)]
         except KeyError:
             try:
-                return self.models[self._keyname(key)]
+                return self.models[self._keyname(str(key))]
             except KeyError:
                 msg = (
                     f"{key} is unsupported. To use custom models, "

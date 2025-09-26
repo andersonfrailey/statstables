@@ -2,26 +2,21 @@
 Tests implementation of tables
 """
 
+import copy
 import pytest
 import pandas as pd
 import numpy as np
 import statsmodels.formula.api as smf
 import pyfixest as pf
-from linearmodels.datasets import mroz
+from linearmodels.datasets import mroz, wage_panel
 from linearmodels.iv import IV2SLS
-from linearmodels.datasets import wage_panel
 from linearmodels.panel import PooledOLS, RandomEffects, PanelOLS
 from statsmodels.api import add_constant
 from statstables import tables, modeltables, SupportedModels
 from faker import Faker
 from pathlib import Path
 from dataclasses import dataclass
-from statsmodels.api import add_constant
-from statstables import tables
-from faker import Faker
-from pathlib import Path
-from linearmodels.datasets import wage_panel
-from linearmodels.panel import PooledOLS, RandomEffects, PanelOLS
+
 
 CUR_PATH = Path(__file__).resolve().parent
 
@@ -202,28 +197,6 @@ def test_model_table_pyfixest():
     tables.ModelTable([feols, fepois])
 
 
-def test_custom_model_table():
-    # test adding a custom model
-    @dataclass
-    class CustomTable(modeltables.ModelData):
-        def __post_init__(self):
-            super().__post_init__()
-            ...
-
-        def pull_params(self):
-            pass
-
-    SupportedModels["custom_model"] = CustomTable
-
-    # test bad model instance
-    @dataclass
-    class BadCustomTable:
-        def __post__init(self): ...
-
-    with pytest.raises(AssertionError):
-        SupportedModels["bad_model"] = BadCustomTable
-
-
 def test_long_table():
     fake = Faker()
     Faker.seed(512)
@@ -334,6 +307,76 @@ def test_linear_models():
         render_type="tex",
         temp_file=Path("wage_table_long_name_actual.tex"),
     )
+
+
+def test_custom_model_table(data):
+    # test adding a custom model
+    @dataclass
+    class CustomTable(modeltables.ModelData):
+        def __post_init__(self):
+            super().__post_init__()
+            ...
+
+        def pull_params(self):
+            pass
+
+    SupportedModels["custom_model"] = CustomTable
+
+    # test bad model instance
+    @dataclass
+    class BadCustomTable:
+        def __post__init(self): ...
+
+    with pytest.raises(AssertionError):
+        SupportedModels["bad_model"] = BadCustomTable
+
+    # create a fake custom class by wrapping statsmodels results to test
+    PARAMETER_MAP = {
+        "params": "params",
+        "sterrs": "bse",
+        "r2": "rsquared",
+        "pvalues": "pvalues",
+        "adjusted_r2": "rsquared_adj",
+        "fstat": "fvalue",
+        "fstat_pvalue": "f_pvalue",
+        "observations": "nobs",
+        "dof_model": "df_model",
+        "dof_resid": "df_resid",
+    }
+
+    class ModelWrapper:
+        """
+        Wraps the statsmodels results to use as an example for the test
+        """
+
+        def __init__(self, result):
+            for _, attr in PARAMETER_MAP.items():
+                setattr(self, attr, getattr(result, attr))
+            self.conf_int = result.conf_int()
+            self.endog_names = result.model.endog_names
+
+    @dataclass
+    class CustomResults(modeltables.ModelData):
+        def __post_init__(self):
+            super().__post_init__()
+
+        def pull_params(self):
+            for info, attr in PARAMETER_MAP.items():
+                try:
+                    self.data[info] = getattr(self.model, attr)
+                except AttributeError:
+                    pass
+            self.data["param_labels"] = set(self.model.params.index.values)
+            self.data["cis_low"] = self.model.conf_int[0]
+            self.data["cis_high"] = self.model.conf_int[1]
+            self.data["dependent_variable"] = self.model.endog_names
+
+    mod = ModelWrapper(smf.ols("A ~ B + C", data=data).fit())
+    SupportedModels.add_model(ModelWrapper, CustomResults)
+    table = tables.ModelTable([mod])
+    table.render_latex()
+    table.render_html()
+    table.render_ascii()
 
 
 def compare_expected_output(
