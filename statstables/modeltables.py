@@ -152,6 +152,7 @@ class PyFixestModel(ModelData):
         params = self.model.coef()
         self.data["params"] = params
         self.data["param_labels"] = set(params.index.values)
+        self.data["sterrs"] = self.model.se()
         confint = self.model.confint()
         self.data["cis_low"] = confint["2.5%"]
         self.data["cis_high"] = confint["97.5%"]
