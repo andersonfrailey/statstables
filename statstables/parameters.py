@@ -185,7 +185,7 @@ DEFAULT_MODEL_TABLE_PARAMS = DEFAULT_TABLE_PARAMS | {
     "show_model_numbers": True,
     "p_values": [0.1, 0.05, 0.01],
     "show_stars": True,
-    "show_model_type": True,
+    "show_model_type": False,
     "dependent_variable": "",
     "include_index": True,
     "show_significance_levels": True,

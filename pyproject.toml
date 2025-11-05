@@ -35,9 +35,21 @@ dependencies = [
     "numpy",
     "pandas>=2",
     "scipy",
+    "unicodeit",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
     "statsmodels",
     "linearmodels",
-    "unicodeit",
+    "pyfixest",
+    "faker",
+]
+
+dev = [
+    "statstables[test]"
 ]
 
 [project.urls]
