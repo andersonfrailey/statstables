@@ -45,7 +45,7 @@ test = [
     "statsmodels",
     "linearmodels",
     "unicodeit",
-    "narwhals"
+    "narwhals",
     "pyfixest",
     "faker",
 ]
