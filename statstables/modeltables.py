@@ -1,4 +1,5 @@
 # Tables that can be used to export model information
+import numpy as np
 from abc import ABC, abstractmethod
 from typing import Any
 from dataclasses import dataclass
@@ -151,7 +152,10 @@ class PyFixestModel(ModelData):
     def pull_params(self):
         for info, attr in PYFIXEST_MAP.items():
             try:
-                self.data[info] = getattr(self.model, attr)
+                val = getattr(self.model, attr)
+                if np.isnan(val):
+                    val = ""
+                self.data[info] = val
             except AttributeError:
                 pass
         params = self.model.coef()
