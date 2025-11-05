@@ -2,13 +2,21 @@
 Tests implementation of tables
 """
 
+import copy
 import pytest
 import pandas as pd
 import numpy as np
 import statsmodels.formula.api as smf
-from statstables import tables
+import pyfixest as pf
+from linearmodels.datasets import mroz, wage_panel
+from linearmodels.iv import IV2SLS
+from linearmodels.panel import PooledOLS, RandomEffects, PanelOLS
+from statsmodels.api import add_constant
+from statstables import tables, modeltables, SupportedModels
 from faker import Faker
 from pathlib import Path
+from dataclasses import dataclass
+
 
 CUR_PATH = Path(__file__).resolve().parent
 
@@ -94,7 +102,7 @@ def test_mean_differences_table(data):
     assert table.table_params["include_index"] == True
 
 
-def test_model_table(data):
+def test_model_table_statsmodels(data):
     mod1 = smf.ols("A ~ B + C -1", data=data).fit()
     mod2 = smf.ols("A ~ B + C", data=data).fit()
     mod_table = tables.ModelTable(models=[mod1, mod2])
@@ -116,6 +124,88 @@ def test_model_table(data):
     assert binary_table.table_params["include_index"] == True
 
 
+def test_model_table_linearmodels():
+    """
+    Test model table with linear models results
+    """
+    # IV results
+    data = mroz.load()
+    data = data.dropna()
+    data = add_constant(data, has_constant="add")
+    iv = IV2SLS(np.log(data.wage), data[["const"]], data.educ, data.fatheduc).fit(
+        cov_type="unadjusted"
+    )
+    ivtable = tables.ModelTable(models=[iv.first_stage.individual["educ"], iv])
+    ivtable.rename_covariates(
+        {
+            "const": "Intercept",
+            "educ": "Education",
+            "fatheduc": "Father Education",
+        }
+    )
+    ivtable.parameter_order(["const", "fatheduc", "educ"])
+
+    # panel and random effects models
+    data = wage_panel.load()
+    year = pd.Categorical(data.year)
+    data = data.set_index(["nr", "year"])
+    data["year"] = year
+    exog_vars = [
+        "black",
+        "hisp",
+        "exper",
+        "expersq",
+        "married",
+        "educ",
+        "union",
+        "year",
+    ]
+    exog = add_constant(data[exog_vars])
+    pooled_mod = PooledOLS(data.lwage, exog).fit()
+    random_mod = RandomEffects(data.lwage, exog).fit()
+    exog_vars = [
+        "expersq",
+        "union",
+        "married",
+    ]
+    panel_exog = add_constant(data[exog_vars])
+    panel_mod = PanelOLS(
+        data.lwage, panel_exog, entity_effects=True, time_effects=True
+    ).fit()
+    panel_table = tables.ModelTable([pooled_mod, random_mod, panel_mod])
+    panel_table.dependent_variable_name = "Log(Wage)"
+    panel_table.rename_covariates(
+        {
+            "const": "Intercept",
+            "exper": "Experience",
+            "expersq": "Experience Squared",
+            "union": "Union",
+            "married": "Married",
+            "black": "Black",
+        }
+    )
+    panel_table.parameter_order(
+        ["const", "exper", "expersq", "union", "married", "black"]
+    )
+
+
+def test_model_table_pyfixest():
+    data = pf.get_data()
+    feols = pf.feols("Y ~ X1 | f1 + f2", data=data)
+    poisson_data = pf.get_data(model="Fepois")
+    fepois = pf.fepois("Y ~ X1 + X2 | f1 + f2", data=poisson_data)
+    pyfixest_table = tables.ModelTable([feols, fepois])
+    temp_path = Path("pyfixest_tables_actual.tex")
+    expected_path = Path(CUR_PATH, "..", "..", "pyfixest_tables.tex")
+    compare_expected_output(
+        expected_file=expected_path,
+        actual_table=pyfixest_table,
+        render_type="tex",
+        temp_file=temp_path,
+        only_tabular=True,
+    )
+
+
 def test_long_table():
     fake = Faker()
     Faker.seed(512)
@@ -126,18 +216,14 @@ def test_long_table():
     longdata = pd.DataFrame({"Names": names, "X1": x1, "X2": x2})
     longtable = tables.GenericTable(longdata, longtable=True, include_index=False)
     temp_path = Path("longtable_actual.tex")
-    longtable.render_latex(temp_path)
-    longtable_tex = temp_path.read_text()
-    # compare to expected output
-    expected_tex = Path(CUR_PATH, "..", "..", "longtable.tex").read_text()
+    expected_tex = Path(CUR_PATH, "..", "..", "longtable.tex")
 
-    try:
-        assert longtable_tex == expected_tex
-        temp_path.unlink()
-    except AssertionError as e:
-        msg = f"longtable expected output has changed. New output in {str(temp_path)}"
-        Path(CUR_PATH, "..", "..", "longtableactual.tex").write_text(longtable_tex)
-        raise e
+    compare_expected_output(
+        expected_file=expected_tex,
+        actual_table=longtable,
+        render_type="tex",
+        temp_file=temp_path,
+    )
 
 
 def test_panel_table():
@@ -164,15 +250,162 @@ def test_panel_table():
     panelb = tables.GenericTable(panelb_df, formatters={"ID": lambda x: f"{x}"})
     panel = tables.PanelTable([panela, panelb], ["Men", "Women"])
 
-    # save temp file for comparison
-    temp_path = Path("panel_table_actual.tex")
-    panel.render_latex(outfile=temp_path)
-    panel_tex = temp_path.read_text()
-    expected_tex = Path(CUR_PATH, "..", "..", "panel.tex").read_text()
-    try:
-        assert panel_tex == expected_tex
-        temp_path.unlink()
-    except AssertionError as e:
-        msg = f"panel table expected output has changed. New output in {str(temp_path)}"
-        Path(CUR_PATH, "..", "..", "paneltableactual.tex").write_text(panel)
-        raise e
+    compare_expected_output(
+        expected_file=Path(CUR_PATH, "..", "..", "panel.tex"),
+        actual_table=panel,
+        render_type="tex",
+        temp_file=Path("panel_table_actual.tex"),
+    )
+
+
+def test_linear_models():
+    data = wage_panel.load()
+    year = pd.Categorical(data.year)
+    data = data.set_index(["nr", "year"])
+    data["year"] = year
+
+    data = wage_panel.load()
+    year = pd.Categorical(data.year)
+    data = data.set_index(["nr", "year"])
+    data["year"] = year
+    exog_vars = [
+        "black",
+        "hisp",
+        "exper",
+        "expersq",
+        "married",
+        "educ",
+        "union",
+        "year",
+    ]
+    exog = add_constant(data[exog_vars])
+    pooled_mod = PooledOLS(data.lwage, exog).fit()
+    random_mod = RandomEffects(data.lwage, exog).fit()
+    exog_vars = [
+        "expersq",
+        "union",
+        "married",
+    ]
+    panel_exog = add_constant(data[exog_vars])
+    panel_mod = PanelOLS(
+        data.lwage, panel_exog, entity_effects=True, time_effects=True
+    ).fit()
+    covariate_labels = {
+        # statstables will convert LaTeX to unicode when rendering HTML and ASCII tables
+        "const": r"$\alpha$",
+        "exper": "Experience",
+        "expersq": "Experience$^2$",
+        "union": "Union",
+        "married": "Married",
+        "black": "Black",
+    }
+    covariate_order = ["const", "exper", "expersq", "union", "married", "black"]
+    panel_table_long_name = tables.ModelTable(
+        [pooled_mod, random_mod, panel_mod],
+        covariate_labels=covariate_labels,
+        covariate_order=covariate_order,
+        dependent_variable_name="A Long Title That Would Look Odd",
+        dependent_var_cover_index=True,
+        dependent_var_alignment="r",
+        show_stars=False,
+        use_tabularx=True,
+    )
+    compare_expected_output(
+        expected_file=Path(CUR_PATH, "..", "..", "wage_table_long_name.tex"),
+        actual_table=panel_table_long_name,
+        render_type="tex",
+        temp_file=Path("wage_table_long_name_actual.tex"),
+    )
+
+
+def test_custom_model_table(data):
+    # test adding a custom model
+    @dataclass
+    class CustomTable(modeltables.ModelData):
+        def __post_init__(self):
+            super().__post_init__()
+            ...
+
+        def pull_params(self):
+            pass
+
+    SupportedModels["custom_model"] = CustomTable
+
+    # test bad model instance
+    @dataclass
+    class BadCustomTable:
+        def __post__init(self): ...
+
+    with pytest.raises(AssertionError):
+        SupportedModels["bad_model"] = BadCustomTable
+
+    # create a fake custom class by wrapping statsmodels results to test
+    PARAMETER_MAP = {
+        "params": "params",
+        "sterrs": "bse",
+        "r2": "rsquared",
+        "pvalues": "pvalues",
+        "adjusted_r2": "rsquared_adj",
+        "fstat": "fvalue",
+        "fstat_pvalue": "f_pvalue",
+        "observations": "nobs",
+        "dof_model": "df_model",
+        "dof_resid": "df_resid",
+    }
+
+    class ModelWrapper:
+        """
+        Wraps the statsmodels results to use as an example for the test
+        """
+
+        def __init__(self, result):
+            for _, attr in PARAMETER_MAP.items():
+                setattr(self, attr, getattr(result, attr))
+            self.conf_int = result.conf_int()
+            self.endog_names = result.model.endog_names
+
+    @dataclass
+    class CustomResults(modeltables.ModelData):
+        def __post_init__(self):
+            super().__post_init__()
+
+        def pull_params(self):
+            for info, attr in PARAMETER_MAP.items():
+                try:
+                    self.data[info] = getattr(self.model, attr)
+                except AttributeError:
+                    pass
+            self.data["param_labels"] = set(self.model.params.index.values)
+            self.data["cis_low"] = self.model.conf_int[0]
+            self.data["cis_high"] = self.model.conf_int[1]
+            self.data["dependent_variable"] = self.model.endog_names
+
+    mod = ModelWrapper(smf.ols("A ~ B + C", data=data).fit())
+    SupportedModels.add_model(ModelWrapper, CustomResults)
+    table = tables.ModelTable([mod])
+    table.render_latex()
+    table.render_html()
+    table.render_ascii()
+
+
+def compare_expected_output(
+    expected_file: Path,
+    actual_table: tables.Table,
+    render_type: str,
+    temp_file: Path,
+    only_tabular: bool = False,
+):
+    match render_type:
+        case "tex":
+            actual_table.render_latex(temp_file, only_tabular=only_tabular)
+    actual_text = temp_file.read_text()
+    expected_text = expected_file.read_text()
+    msg = f"Output has changed. New output in {str(temp_file)}"
+    assert actual_text == expected_text, msg
+    temp_file.unlink()
+    # try:
+    #     assert actual_text == expected_text
+    #     temp_file.unlink()
+    # except AssertionError as e:
+    #     msg = f"Output has changed. New output in {str(temp_file)}"
+    #     raise e(msg)

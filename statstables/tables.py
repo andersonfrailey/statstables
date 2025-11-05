@@ -7,7 +7,7 @@ import narwhals as nw
 from narwhals.typing import IntoDataFrame
 from abc import ABC, abstractmethod
 from scipy import stats
-from typing import Union, Callable
+from typing import Union, Callable, overload
 from collections import defaultdict, ChainMap
 from pathlib import Path
 from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
@@ -20,8 +20,6 @@ class Table(ABC):
     """
     Abstract class for defining common characteristics/methods of all tables
     """
-
-    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
 
     def __init__(
         self,
@@ -77,7 +75,7 @@ class Table(ABC):
         self.table_params.reset_params(restore_to_defaults)
 
     def reset_custom_features(self):
-        self._multicolumns = []
+        self._multicolumns: list[dict] = []
         self._index_labels = dict()
         self._column_labels = dict()
         self.notes = []
@@ -135,6 +133,8 @@ class Table(ABC):
         formats: list[str] | None = None,
         position: int | None = None,
         underline: bool = True,
+        cover_index: bool = False,
+        alignment: str = "c",
     ) -> None:
         """
         All columns that span multiple columns in the table. These will be placed
@@ -152,6 +152,14 @@ class Table(ABC):
         formats : list[str], optional
             Not implemented yet. Will eventually allow for text formatting (bold,
             underline, etc.), by default None
+        position : int
+            Where among all multi-column lines this should be placed
+        underline : bool, optional
+            If true, underlines the column text
+        cover_index : bool, optional
+            If true, the text will also span across the index column
+        alignment : str, optional
+            String indicating how to align the text
         """
         # TODO: implement formats (underline, bold, etc.)
         # TODO: Allow for placing the multicolumns below the table body
@@ -160,11 +168,21 @@ class Table(ABC):
         assert len(columns) == len(
             spans
         ), "A column label must be provided for each column in the table"
+        _n_cols = self.ncolumns
+        if cover_index:
+            _n_cols += 1
         assert (
-            sum(spans) == self.ncolumns
+            sum(spans) == _n_cols
         ), f"The sum of spans must equal the number of columns. There are {self.ncolumns} columns, but spans sum to {sum(spans)}"
         _position = len(self._multicolumns) if position is None else position
-        self._multicolumns.insert(_position, (columns, spans, underline))
+        row = {
+            "columns": columns,
+            "spans": spans,
+            "underline": underline,
+            "cover_index": cover_index,
+            "alignment": alignment,
+        }
+        self._multicolumns.insert(_position, row)
 
     def remove_multicolumn(self, column=None, index=None, all=False) -> None:
         """
@@ -529,6 +547,12 @@ class Table(ABC):
         elif index is not None:
             self.custom_html_lines[location].pop(index)
 
+    @overload
+    def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
+
+    @overload
+    def render_latex(self, outfile: Union[str, Path], only_tabular: bool) -> None: ...
+
     def render_latex(
         self,
         outfile: Union[str, Path, None] = None,
@@ -764,7 +788,7 @@ class GenericTable(Table):
     def reset_custom_features(self):
         super().reset_custom_features()
 
-    def _create_rows(self):
+    def _create_rows(self) -> list[list[ChainMap]]:
         rows = []
         for _index, row in self.df.iterrows():
             _row = [
@@ -872,6 +896,7 @@ class MeanDifferenceTable(Table):
         # add toal means column to means
         self.means["Overall Mean"] = self.df[var_list].mean()
         total_sem = self.df[var_list].sem()
+        assert isinstance(total_sem, pd.Series)
         total_sem.name = "Overall Mean"
         self.sem = pd.merge(
             self.type_gdf[var_list].sem().T,
@@ -937,8 +962,8 @@ class MeanDifferenceTable(Table):
         )  # may need to move this later if we make including the total mean optional
 
     @staticmethod
-    def _render(render_func):
-        def wrapper(self, **kwargs):
+    def _render(render_func: Callable):
+        def wrapper(self, *args, **kwargs):
             if self.table_params["show_n"]:
                 self.add_line(
                     [
@@ -947,7 +972,10 @@ class MeanDifferenceTable(Table):
                     ],
                     location="after-columns",
                 )
-            if self.table_params["show_significance_levels"]:
+            if (
+                self.table_params["show_significance_levels"]
+                and self.table_params["show_stars"]
+            ):
                 _p = "p<"
                 if render_func.__name__ == "render_latex":
                     _p = "p$<$"
@@ -961,19 +989,30 @@ class MeanDifferenceTable(Table):
                 )
                 note = f"{stars}"
                 self.add_note(note, alignment="l", escape=False)
-            output = render_func(self, **kwargs)
+            output = render_func(self, *args, **kwargs)
             # remove all the supurflous lines that may not be needed in future renders
             if self.table_params["show_n"]:
                 self.remove_line(location="after-columns", index=-1)
-            if self.table_params["show_significance_levels"]:
+            if (
+                self.table_params["show_significance_levels"]
+                and self.table_params["show_stars"]
+            ):
                 self.remove_note(index=-1)
                 print("Note: Standard errors assume samples are drawn independently.")
             return output
 
         return wrapper
 
+    @overload
+    def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
+
+    @overload
+    def render_latex(self, outfile: Union[str, Path], only_tabular: bool) -> None: ...
+
     @_render
-    def render_latex(self, outfile=None, only_tabular=False) -> str | None:
+    def render_latex(
+        self, outfile: Union[str, Path, None] = None, only_tabular: bool = False
+    ) -> str | None:
         return super().render_latex(outfile, only_tabular)
 
     @_render
@@ -1023,7 +1062,7 @@ class MeanDifferenceTable(Table):
                 ses.name = _col
                 self.sem = self.sem.merge(ses, left_index=True, right_index=True)
 
-    def _create_rows(self):
+    def _create_rows(self) -> list[list[ChainMap]]:
         rows = []
         for _index, row in self.means.iterrows():
             sem_row = [self._format_value(f"{_index}_label", "_index", "")]
@@ -1073,10 +1112,9 @@ class SummaryTable(GenericTable):
     def __init__(self, df: IntoDataFrame, var_list: list[str] | None = None, **kwargs):
         self.df = nw.from_native(df).to_pandas()
         if var_list is None:
-            var_list = self.df.columns
+            var_list = list(self.df.columns)
         summary_df = self.df[var_list].describe()
         super().__init__(summary_df, **kwargs)
-        # self.reset_custom_features()
 
     def reset_custom_features(self):
         super().reset_custom_features()
@@ -1087,6 +1125,9 @@ class SummaryTable(GenericTable):
                 "std": "Std. Dev.",
                 "min": "Min.",
                 "max": "Max.",
+                "25%": "25\\%",
+                "50%": "50\\%",
+                "75%": "75\\%",
             }
         )
         self.custom_formatters({"count": lambda x: f"{int(x):,}"})
@@ -1207,15 +1248,8 @@ class ModelTable(Table):
         dep_vars = []
         # pull the parameters from each model
         for mod in models:
-            try:
-                mod_obj = st.SupportedModels[type(mod)](mod)
-                self.models.append(mod_obj)
-            except KeyError as e:
-                msg = (
-                    f"{type(mod)} is unsupported. To use custom models, "
-                    "add them to the `st.SupportedModels` dictionary."
-                )
-                raise KeyError(msg) from e
+            mod_obj = st.SupportedModels[type(mod)](mod)
+            self.models.append(mod_obj)
             self.params.update(mod_obj.param_labels)
             dep_vars.append(mod_obj.dependent_variable)
 
@@ -1304,7 +1338,7 @@ class ModelTable(Table):
             )
         self.param_labels = order
 
-    def _create_rows(self):
+    def _create_rows(self) -> list[list[ChainMap]]:
         rows = []
         sig_digits = self.table_params["sig_digits"]
         for param in self.param_labels:
@@ -1415,8 +1449,11 @@ class ModelTable(Table):
             The rendering function being wrapped
         """
 
-        def wrapper(self, **kwargs):
-            if self.table_params["show_significance_levels"]:
+        def wrapper(self, *args, **kwargs):
+            if (
+                self.table_params["show_significance_levels"]
+                and self.table_params["show_stars"]
+            ):
                 _p = "p<"
                 if render_func.__name__ == "render_latex":
                     _p = "p$<$"
@@ -1431,17 +1468,28 @@ class ModelTable(Table):
                 stars_note = f"{stars}"
                 self.add_note(stars_note, alignment="l", escape=False, position=0)
                 _stars_note = (stars_note, "l", False)
-            output = render_func(self, **kwargs)
-            if self.table_params["show_significance_levels"]:
+            output = render_func(self, *args, **kwargs)
+            if (
+                self.table_params["show_significance_levels"]
+                and self.table_params["show_stars"]
+            ):
                 self.remove_note(note=_stars_note)
 
             return output
 
         return wrapper
 
+    @overload
+    def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
+
+    @overload
+    def render_latex(self, outfile: Union[str, Path], only_tabular: bool) -> None: ...
+
     @_render
-    def render_latex(self, outfile=None, only_tabular=False) -> Union[str, None]:
-        return super().render_latex(outfile, only_tabular)
+    def render_latex(
+        self, outfile: Union[str, Path, None] = None, only_tabular=False
+    ) -> Union[str, None]:
+        return super().render_latex(outfile=outfile, only_tabular=only_tabular)
 
     @_render
     def render_html(self, outfile=None, convert_latex: bool = True) -> Union[str, None]:
@@ -1458,28 +1506,34 @@ class ModelTable(Table):
 
     @dependent_variable_name.setter
     def dependent_variable_name(self, name: str) -> None:
+        span = self.ncolumns + self.table_params["dependent_var_cover_index"]
         # remove current dependent variable from multicolumns to update later
         if len(self._multicolumns) > 0:
             try:
-                col = (
-                    [f"Dependent Variable: {self.dependent_variable_name}"],
-                    [self.ncolumns],
-                    True,
-                )
+                col = {
+                    "columns": [f"Dependent Variable: {self.dependent_variable_name}"],
+                    "spans": [span],
+                    "underline": self.table_params["underline_dependent_variable_name"],
+                    "cover_index": self.table_params["dependent_var_cover_index"],
+                    "alignment": self.table_params["dependent_var_alignment"],
+                }
                 self.remove_multicolumn(col)
             except ValueError:
                 pass
         self._dependent_variable_name = name
         if name != "":
             self.add_multicolumns(
-                [f"Dependent Variable: {name}"], [self.ncolumns], position=0
+                columns=[f"Dependent Variable: {name}"],
+                spans=[span],
+                position=0,
+                cover_index=self.table_params["dependent_var_cover_index"],
+                underline=self.table_params["underline_dependent_variable_name"],
+                alignment=self.table_params["dependent_var_alignment"],
             )
 
 
 class PanelTable:
-    """
-    Merge multiple tables together. Not implemented yet
-    """
+    """ """
 
     VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center"]
     ALIGNMENTS = {
@@ -1508,6 +1562,8 @@ class PanelTable:
     ):
         for table in panels:
             assert isinstance(table, Table)
+            # must use tabularx to get alignment right
+            table.table_params["use_tabularx"] = True
         self.npanels = len(panels)
         nlabels = len(panel_labels)
         if len(panels) > len(panel_labels):
@@ -1526,7 +1582,7 @@ class PanelTable:
         assert panel_label_alignment in self.VALID_ALIGNMENTS
         self.panel_label_alignment = panel_label_alignment
 
-    def render_latex(self, outfile) -> str | None:
+    def render_latex(self, outfile, **kwargs) -> str | None:
         # assign multicolumns to each table
         match self.enumerate_type:
             case "alpha_upper":
@@ -1549,6 +1605,7 @@ class PanelTable:
             table.panel_label = label_str
             table.panel_label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
             _tex_str = table.render_latex(only_tabular=True)
+            assert isinstance(_tex_str, str)
             if i < self.npanels - 1:
                 # add space between previous panel and label for next one
                 # except for the very last panel
@@ -1557,10 +1614,6 @@ class PanelTable:
                     "  \\bottomrule\\\\\n\\end{tabularx}\n",
                 )
             tex_str += "\n" + _tex_str
-            # _tex_str = table.render_latex(only_tabular=True)
-            # if self.enumerate_type is not None:
-            #     _tex_str = self._modify_latex(table=table, label=lable_str)
-            # tex_str += _tex_str
             self._increment_label_char()
 
         if not outfile:
@@ -1584,7 +1637,6 @@ class PanelTable:
             case _:
                 self.label_char = ""
         # get all the table widths to know how large to make panels
-        renderers = []
         max_width = 0
         for table in self.panels:
             renderer = ASCIIRenderer(table)
@@ -1597,7 +1649,7 @@ class PanelTable:
         for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
             # if it is not the first table, turn off double top rule
             if i != 0:
-                table.double_top_rule = False
+                table.table_params["double_top_rule"] = False
             # add multicolumn to the table
             _label = f"Panel {self.label_char}) {label}"
             label_align = self.ASCII_ALIGNMENTS[self.panel_label_alignment]
