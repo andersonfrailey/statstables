@@ -5,6 +5,7 @@ Tests implementation of tables
 import copy
 import pytest
 import pandas as pd
+import polars as pl
 import numpy as np
 import statsmodels.formula.api as smf
 import pyfixest as pf
@@ -51,6 +52,14 @@ def test_generic_table(data):
     df = pd.DataFrame({"one": ["1", "2", "3"], "two": ["-1", "-2", "-3"]})
     table = tables.GenericTable(df)
     print(table)
+
+    # test with polars dataframe to test narwhals implementation
+    pl_data = pl.from_pandas(data)
+    table = tables.GenericTable(df=pl_data)
+
+    table.render_ascii()
+    table.render_html()
+    table.render_latex()
 
 
 def test_summary_table(data):
