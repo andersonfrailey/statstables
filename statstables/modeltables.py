@@ -140,7 +140,7 @@ class LinearModelsData(ModelData):
             self.data["ngroups"] = self.model.entity_info.total
 
 
-PYFIXEST_MAP = {"params": "coef"}
+PYFIXEST_MAP = {"observations": "_N", "r2": "_r2"}
 
 
 @dataclass
@@ -149,6 +149,11 @@ class PyFixestModel(ModelData):
         super().__post_init__()
 
     def pull_params(self):
+        for info, attr in PYFIXEST_MAP.items():
+            try:
+                self.data[info] = getattr(self.model, attr)
+            except AttributeError:
+                pass
         params = self.model.coef()
         self.data["params"] = params
         self.data["param_labels"] = set(params.index.values)

@@ -194,7 +194,16 @@ def test_model_table_pyfixest():
     feols = pf.feols("Y ~ X1 | f1 + f2", data=data)
     poisson_data = pf.get_data(model="Fepois")
     fepois = pf.fepois("Y ~ X1 + X2 | f1 + f2", data=poisson_data)
-    tables.ModelTable([feols, fepois])
+    pyfixest_table = tables.ModelTable([feols, fepois])
+    temp_path = Path("pyfixest_tables_actual.tex")
+    expected_path = Path(CUR_PATH, "..", "..", "pyfixest_tables.tex")
+    compare_expected_output(
+        expected_file=expected_path,
+        actual_table=pyfixest_table,
+        render_type="tex",
+        temp_file=temp_path,
+        only_tabular=True,
+    )
 
 
 def test_long_table():
@@ -380,16 +389,23 @@ def test_custom_model_table(data):
 
 
 def compare_expected_output(
-    expected_file: Path, actual_table: tables.Table, render_type: str, temp_file: Path
+    expected_file: Path,
+    actual_table: tables.Table,
+    render_type: str,
+    temp_file: Path,
+    only_tabular: bool = False,
 ):
     match render_type:
         case "tex":
-            actual_table.render_latex(temp_file)
+            actual_table.render_latex(temp_file, only_tabular=only_tabular)
     actual_text = temp_file.read_text()
     expected_text = expected_file.read_text()
-    try:
-        assert actual_text == expected_text
-        temp_file.unlink()
-    except AssertionError as e:
-        msg = f"Output has changed. New output in {str(temp_file)}"
-        raise e(msg)
+    msg = f"Output has changed. New output in {str(temp_file)}"
+    assert actual_text == expected_text, msg
+    temp_file.unlink()
+    # try:
+    #     assert actual_text == expected_text
+    #     temp_file.unlink()
+    # except AssertionError as e:
+    #     msg = f"Output has changed. New output in {str(temp_file)}"
+    #     raise e(msg)

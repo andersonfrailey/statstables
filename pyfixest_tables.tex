@@ -1,0 +1,22 @@
+% You must add \usepackage{booktabs} to your LaTex document for table to compile.
+% If you use color in your formatting, you must also add \usepackage{xcolor} to the preamble.
+
+% If you are making a longtable, you must add \usepackage{longtable} to the preamble.
+
+\begin{tabular}{lcc}
+  \toprule
+  \toprule
+  & \multicolumn{2}{c}{Dependent Variable: Y} \\
+  \cmidrule(lr){2-3}
+   &   (1) & (2)\\
+  \midrule
+  X1 & -0.919*** & -0.007 \\
+   & (0.066) & (0.035) \\
+  X2 &  & -0.015 \\
+   &  & (0.010) \\
+  \midrule
+  Observations & 997 & 997 \\
+  $R^2$ & 0.609 & nan \\
+  \bottomrule
+  \multicolumn{3}{l}{{\small \textit{*p$<$0.1, **p$<$0.05, ***p$<$0.01}}}\\
+\end{tabular}
