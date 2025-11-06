@@ -4,3 +4,5 @@ scipy
 unicodeit
 Faker
 narwhals
+polars
+pyarrow
