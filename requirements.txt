@@ -2,3 +2,7 @@ numpy
 pandas
 scipy
 unicodeit
+Faker
+narwhals
+polars
+pyarrow
