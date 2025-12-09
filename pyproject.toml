@@ -34,7 +34,7 @@ classifiers = [
 dependencies = [
     "numpy",
     "pandas>=2",
-    "scipy",
+    "scipy>=1.6.1",
     "unicodeit",
 ]
 
