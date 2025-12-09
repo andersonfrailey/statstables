@@ -28,13 +28,14 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Development Status :: 2 - Pre-Alpha"
 ]
 dependencies = [
     "numpy",
     "pandas>=2",
-    "scipy>=1.6.1",
+    "scipy",
     "unicodeit",
 ]
 
@@ -46,7 +47,7 @@ test = [
     "linearmodels",
     "unicodeit",
     "narwhals",
-    "pyfixest",
+    "pyfixest>=0.40.1",
     "faker",
     "polars",
     "pyarrow",
