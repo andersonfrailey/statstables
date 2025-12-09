@@ -44,8 +44,12 @@ test = [
     "pytest-cov>=2.0",
     "statsmodels",
     "linearmodels",
-    "pyfixest",
+    "unicodeit",
+    "narwhals",
+    "pyfixest>=0.40.1",
     "faker",
+    "polars",
+    "pyarrow",
 ]
 
 dev = [
