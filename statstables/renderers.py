@@ -864,3 +864,78 @@ class ASCIIRenderer(Renderer):
         if value > 20:
             raise ValueError("Woah there buddy. That's a lot of space.")
         self._padding = value
+
+
+class TypstRenderer(Renderer):
+    def __init__(self, table):
+        self.table = table
+        self.ncolumns = self.table.ncolumns + int(
+            self.table.table_params["include_index"]
+        )
+        self.indent_level = 0
+
+    def render(self, in_figure: bool = True, include_settings: bool = False):
+        header = self.generate_header(in_figure=in_figure)
+        body = self.generate_body()
+        footer = self.generate_footer(
+            in_figure=in_figure, include_settings=include_settings
+        )
+        return header + body + footer
+
+    def generate_header(self, in_figure: bool = True, include_settings: bool = False):
+        header = ""
+        if include_settings:
+            header += "#{\\n  set table(\\n"
+        if in_figure:
+            header += "#figure(\ntable(\n"
+        else:
+            header += "#table(\n"
+        # TODO: allow for all the other specifications typst supports
+        header += f"  columns: {self.ncolumns},\n  table.hline(stroke: 1.5pt),\n"
+        if self.table.table_params["show_columns"]:
+            header += f"  table.header("
+            _index_name = self.table.index_name
+            header += f"[{_index_name * self.table.table_params['include_index']}],"
+            for col in self.table.columns:
+                _col = self.table._column_labels.get(col, col)
+                header += f" [{_col}],"
+            header = header[:-1] + "),"  # lop off the last comma
+        return header + "\n"
+
+    def generate_body(self):
+        rows = self.table._create_rows()
+        body = ""
+        for row in rows:
+            body += "  "
+            for r in row:
+                body += f"[{self._format_value(r)}],"
+            body += "\n"
+        return body
+
+    def generate_footer(self, in_figure: bool = True, include_settings: bool = False):
+        return "table.hline()\n)\n" + (")\n" * in_figure) + ("}" * include_settings)
+
+    def _create_line(self, line):
+        out = ""
+        if line["deliminate"]:
+            out += "  table.hline\n"
+        out += f"  [{line['label']}], " * self.table.table_params["include_index"]
+        for elm in line["line"]:
+            out += f" [{elm}],"
+        out += "\\\\\n"
+        return out
+
+    def _format_value(self, formatting_dict, **kwargs):
+        start = ""
+        end = ""
+        if formatting_dict["bold"]:
+            start += "*"
+            end += "*"
+        if formatting_dict["italic"]:
+            start += "_"
+            end += "_"
+        if formatting_dict["color"] is not None:
+            start += f"text({formatting_dict['color']})["
+            end += "]"
+        _value = formatting_dict["value"].replace("*", "\\*")
+        return start + _value + end

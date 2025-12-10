@@ -10,7 +10,7 @@ from scipy import stats
 from typing import Union, Callable, overload
 from collections import defaultdict, ChainMap
 from pathlib import Path
-from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
+from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer, TypstRenderer
 from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS, latex_preamble
 from .parameters import TableParams, MeanDiffsTableParams, ModelTableParams
 from .cellformatting import DEFAULT_FORMATS, validate_format_dict
@@ -592,11 +592,26 @@ class Table(ABC):
         Path(outfile).write_text(tex_str)
         return None
 
+    @overload
+    def render_html(
+        self, outfile: None, table_class: str, convert_latex: bool, *args, **kwargs
+    ) -> str: ...
+
+    @overload
+    def render_html(
+        self,
+        outfile: Union[str, Path],
+        table_class: str,
+        convert_latex: bool,
+        *args,
+        **kwargs,
+    ) -> None: ...
+
     def render_html(
         self,
         outfile: Union[str, Path, None] = None,
-        table_class="",
-        convert_latex=True,
+        table_class: str = "",
+        convert_latex: bool = True,
         *args,
         **kwargs,
     ) -> str | None:
@@ -630,6 +645,36 @@ class Table(ABC):
 
     def render_ascii(self, convert_latex=True) -> str:
         return ASCIIRenderer(self).render(convert_latex=convert_latex)
+
+    @overload
+    def render_typst(
+        self,
+        outfile: None,
+        in_figure: bool,
+        include_settings: bool,
+    ) -> str: ...
+
+    @overload
+    def render_typst(
+        self,
+        outfile: Union[str, Path],
+        in_figure: bool,
+        include_settings: bool,
+    ) -> None: ...
+
+    def render_typst(
+        self,
+        outfile: Union[str, Path, None] = None,
+        in_figure: bool = False,
+        include_settings: bool = False,
+    ) -> str | None:
+        typst_str = TypstRenderer(self).render(
+            in_figure=in_figure, include_settings=include_settings
+        )
+        if not outfile:
+            return typst_str
+        Path(outfile).write_text(typst_str)
+        return None
 
     def __str__(self) -> str:
         return self.render_ascii()
