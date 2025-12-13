@@ -1216,13 +1216,23 @@ class ModelTable(Table):
     model_stats = [
         ("observations", "Observations", False),
         ("ngroups", "N. Groups", False),
-        ("r2", {"latex": "$R^2$", "html": "R<sup>2</sup>", "ascii": "R^2"}, False),
+        (
+            "r2",
+            {
+                "latex": "$R^2$",
+                "html": "R<sup>2</sup>",
+                "ascii": "R^2",
+                "typst": "$R^2$",
+            },
+            False,
+        ),
         (
             "adjusted_r2",
             {
                 "latex": "Adjusted $R^2$",
                 "html": "Adjusted R<sup>2</sup>",
                 "ascii": "Adjusted R^2",
+                "typst": "Adjusted $R^2$",
             },
             False,
         ),
@@ -1232,6 +1242,7 @@ class ModelTable(Table):
                 "latex": "Pseudo $R^2$",
                 "html": "Pseudo R<sup>2</sup>",
                 "ascii": "Pseudo R^2",
+                "typst": "Pseudo $R^2$",
             },
             False,
         ),

@@ -892,8 +892,6 @@ class TypstRenderer(Renderer):
         table_params: dict | None = None,
         override_settings: dict | None = None,
     ):
-        # including an alt caption requires placing a table in a figure.
-        # auto turn it on in case the user leaves it off
         if figure_params:
             if not in_figure:
                 msg = (
@@ -922,13 +920,18 @@ class TypstRenderer(Renderer):
         override_settings: dict | None = None,
     ):
         header = ""
+        # add local scope for settings that override the main document settings
         if override_settings:
             header += "#{\n  set table(\n"
         if in_figure:
             header += "#figure(\n"
+            caption = f"  caption: [{self.table.caption}],\n"
             if figure_params:
                 for param, value in figure_params.items():
+                    if param == "caption":
+                        caption = ""
                     header += f"  {param}: {value},\n"
+            header += f"  {caption}"
             header += "table(\n"
         else:
             header += "#table(\n"
@@ -982,6 +985,24 @@ class TypstRenderer(Renderer):
             for r in row:
                 body += f"[{self._format_value(r)}],"
             body += "\n"
+
+        for line in self.table.custom_tex_lines["after-body"]:
+            body += line
+        for line in self.table.custom_lines["after-body"]:
+            body += self._create_line(line)
+
+        if isinstance(self.table, st.tables.ModelTable):
+            body += "  table.hline(stroke: 0.05em),\n"
+            for line in self.table.custom_lines["before-model-stats"]:
+                body += self._create_line(line)
+            stats_rows = self.table._create_stats_rows(renderer="typst")
+            for row in stats_rows:
+                body += "  "
+                for r in row:
+                    body += f"[{self._format_value(r)}],"
+                body += "\n"
+            for line in self.table.custom_lines["after-model-stats"]:
+                body += self._create_line(line)
         return body
 
     def generate_footer(
@@ -996,8 +1017,13 @@ class TypstRenderer(Renderer):
                 col_span = self.ncolumns + self.table.table_params["include_index"]
                 align = self.ALIGNMENTS[alignment]
                 footer += f"  table.cell(colspan: {col_span}, [{note}], align: {align})"
+        label = ""
+        if self.table.label:
+            label = f"<{self.table.label}>"
         footer += (
-            "table.hline()\n)\n" + (")\n" * in_figure) + ("}" * has_override_settings)
+            "table.hline()\n)\n"
+            + (f"){label}\n" * in_figure)
+            + ("}" * has_override_settings)
         )
         return footer
 
