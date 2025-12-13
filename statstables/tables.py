@@ -10,7 +10,7 @@ from scipy import stats
 from typing import Union, Callable, overload
 from collections import defaultdict, ChainMap
 from pathlib import Path
-from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
+from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer, TypstRenderer
 from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS, latex_preamble
 from .parameters import TableParams, MeanDiffsTableParams, ModelTableParams
 from .cellformatting import DEFAULT_FORMATS, validate_format_dict
@@ -175,6 +175,7 @@ class Table(ABC):
             sum(spans) == _n_cols
         ), f"The sum of spans must equal the number of columns. There are {self.ncolumns} columns, but spans sum to {sum(spans)}"
         _position = len(self._multicolumns) if position is None else position
+        # TODO: Convert this into a class. should help with typing and clarrity
         row = {
             "columns": columns,
             "spans": spans,
@@ -592,11 +593,26 @@ class Table(ABC):
         Path(outfile).write_text(tex_str)
         return None
 
+    @overload
+    def render_html(
+        self, outfile: None, table_class: str, convert_latex: bool, *args, **kwargs
+    ) -> str: ...
+
+    @overload
+    def render_html(
+        self,
+        outfile: Union[str, Path],
+        table_class: str,
+        convert_latex: bool,
+        *args,
+        **kwargs,
+    ) -> None: ...
+
     def render_html(
         self,
         outfile: Union[str, Path, None] = None,
-        table_class="",
-        convert_latex=True,
+        table_class: str = "",
+        convert_latex: bool = True,
         *args,
         **kwargs,
     ) -> str | None:
@@ -630,6 +646,67 @@ class Table(ABC):
 
     def render_ascii(self, convert_latex=True) -> str:
         return ASCIIRenderer(self).render(convert_latex=convert_latex)
+
+    @overload
+    def render_typst(
+        self,
+        outfile: None,
+        in_figure: bool,
+        include_settings: bool,
+    ) -> str: ...
+
+    @overload
+    def render_typst(
+        self,
+        outfile: Union[str, Path],
+        in_figure: bool,
+        include_settings: bool,
+    ) -> None: ...
+
+    def render_typst(
+        self,
+        outfile: Union[str, Path, None] = None,
+        in_figure: bool = False,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+    ) -> str | None:
+        """
+        Render table formatted for typst documents
+
+        Parameters
+        ----------
+        outfile : Union[str, Path, None], optional
+            File name or file path to save the table to, by default None
+        in_figure : bool, optional
+            If true, wraps the table in a figure function, by default False
+        figure_params : dict | None, optional
+            Parameters to pass into the figure function. Note: statstables does
+            not validate the parameters included in this dictionary, by default None
+        table_params : dict | None, optional
+            Parameters to pass into the table function. Note: statstables does
+            not valuidate the parameters included in this dictionary, by default None
+        override_settings : dict | None, optional
+            Settings that can be used to override any default table settings in
+            your typst document, by default None
+
+        Returns
+        -------
+        str | None
+            If an outfile is not specified, the table is returned as a string
+            suitable for a typst document. Otherwise the table will save the
+            table to the specified file and return none.
+        """
+        typst_str = TypstRenderer(self).render(
+            in_figure=in_figure,
+            figure_params=figure_params,
+            table_params=table_params,
+            override_settings=override_settings,
+        )
+        if not outfile:
+            return typst_str
+        Path(outfile).write_text(typst_str)
+        return None
 
     def __str__(self) -> str:
         return self.render_ascii()
@@ -1139,13 +1216,23 @@ class ModelTable(Table):
     model_stats = [
         ("observations", "Observations", False),
         ("ngroups", "N. Groups", False),
-        ("r2", {"latex": "$R^2$", "html": "R<sup>2</sup>", "ascii": "R^2"}, False),
+        (
+            "r2",
+            {
+                "latex": "$R^2$",
+                "html": "R<sup>2</sup>",
+                "ascii": "R^2",
+                "typst": "$R^2$",
+            },
+            False,
+        ),
         (
             "adjusted_r2",
             {
                 "latex": "Adjusted $R^2$",
                 "html": "Adjusted R<sup>2</sup>",
                 "ascii": "Adjusted R^2",
+                "typst": "Adjusted $R^2$",
             },
             False,
         ),
@@ -1155,6 +1242,7 @@ class ModelTable(Table):
                 "latex": "Pseudo $R^2$",
                 "html": "Pseudo R<sup>2</sup>",
                 "ascii": "Pseudo R^2",
+                "typst": "Pseudo $R^2$",
             },
             False,
         ),
