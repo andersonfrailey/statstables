@@ -987,9 +987,19 @@ class TypstRenderer(Renderer):
     def generate_footer(
         self, in_figure: bool = True, has_override_settings: bool = False
     ):
-        return (
+        footer = ""
+        if self.table.custom_lines["after-footer"]:
+            for line in self.table.custom_lines["after-footer"]:
+                footer += self._create_line(line)
+        if self.table.notes:
+            for note, alignment, _ in self.table.notes:
+                col_span = self.ncolumns + self.table.table_params["include_index"]
+                align = self.ALIGNMENTS[alignment]
+                footer += f"  table.cell(colspan: {col_span}, [{note}], align: {align})"
+        footer += (
             "table.hline()\n)\n" + (")\n" * in_figure) + ("}" * has_override_settings)
         )
+        return footer
 
     def _create_line(self, line):
         out = ""
