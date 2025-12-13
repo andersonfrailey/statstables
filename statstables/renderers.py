@@ -1,4 +1,5 @@
 import math
+import warnings
 import statstables as st
 import textwrap
 from abc import ABC, abstractmethod
@@ -867,39 +868,110 @@ class ASCIIRenderer(Renderer):
 
 
 class TypstRenderer(Renderer):
+    ALIGNMENTS = {
+        "l": "left",
+        "c": "center",
+        "r": "right",
+        "left": "left",
+        "center": "center",
+        "right": "right",
+    }
+
     def __init__(self, table):
         self.table = table
         self.ncolumns = self.table.ncolumns + int(
             self.table.table_params["include_index"]
         )
-        self.indent_level = 0
+        self.ialign = self.ALIGNMENTS[self.table.table_params["index_alignment"]]
+        self.calign = self.ALIGNMENTS[self.table.table_params["column_alignment"]]
 
-    def render(self, in_figure: bool = True, include_settings: bool = False):
-        header = self.generate_header(in_figure=in_figure)
+    def render(
+        self,
+        in_figure: bool = True,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+    ):
+        # including an alt caption requires placing a table in a figure.
+        # auto turn it on in case the user leaves it off
+        if figure_params:
+            if not in_figure:
+                msg = (
+                    "Figure parameters were given but in_figure was set to False."
+                    " statstables has changed in_figure to True to use the figure parameters."
+                )
+                warnings.warn(msg)
+            in_figure = True
+        header = self.generate_header(
+            in_figure=in_figure,
+            figure_params=figure_params,
+            table_params=table_params,
+        )
         body = self.generate_body()
+        has_override_settings = override_settings is not None
         footer = self.generate_footer(
-            in_figure=in_figure, include_settings=include_settings
+            in_figure=in_figure, has_override_settings=has_override_settings
         )
         return header + body + footer
 
-    def generate_header(self, in_figure: bool = True, include_settings: bool = False):
+    def generate_header(
+        self,
+        in_figure: bool = True,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+    ):
         header = ""
-        if include_settings:
-            header += "#{\\n  set table(\\n"
+        if override_settings:
+            header += "#{\n  set table(\n"
         if in_figure:
-            header += "#figure(\ntable(\n"
+            header += "#figure(\n"
+            if figure_params:
+                for param, value in figure_params.items():
+                    header += f"  {param}: {value},\n"
+            header += "table(\n"
         else:
             header += "#table(\n"
-        # TODO: allow for all the other specifications typst supports
-        header += f"  columns: {self.ncolumns},\n  table.hline(stroke: 1.5pt),\n"
-        if self.table.table_params["show_columns"]:
+        # add a small gutter between columns so that if there are multiple multicolumn
+        # lines and they are underlined there will be a slight gap between them.
+        # this will be overridden if the user provides a column-gutter parameter
+        col_gutter = "  column-gutter: 0.5em,\n"
+        if table_params:
+            for param, value in table_params.items():
+                if param == "column-gutter":
+                    col_gutter = ""
+                header += f"  {param}: {value},\n"
+        header += (
+            f"  columns: {self.ncolumns},\n{col_gutter}  table.hline(stroke: 0.15em),\n"
+        )
+        if self.table.table_params["show_columns"] or self.table._multicolumns:
             header += f"  table.header("
+        # multicolumns
+        for row in self.table._multicolumns:
+            header += (
+                "  [], "
+                * self.table.table_params["include_index"]
+                * (1 - row["cover_index"])
+            )
+            underline_line = ""
+            underline_start = 0 if row["cover_index"] else 1
+            for c, s in zip(row["columns"], row["spans"]):
+                align = self.ALIGNMENTS[row["alignment"]]
+                header += f"table.cell([{c}], align: {align}, colspan: {s}), "
+                if row["underline"]:
+                    underline_end = underline_start + s
+                    underline_line += f"table.hline(start: {underline_start}, end:{underline_end}, stroke: 0.075em),"
+                    underline_start = underline_end
+            if row["underline"]:
+                header += f"\n  {underline_line}\n"
+        if self.table.table_params["show_columns"]:
             _index_name = self.table.index_name
-            header += f"[{_index_name * self.table.table_params['include_index']}],"
+            header += f"  [{_index_name}]," * self.table.table_params["include_index"]
             for col in self.table.columns:
                 _col = self.table._column_labels.get(col, col)
                 header += f" [{_col}],"
             header = header[:-1] + "),"  # lop off the last comma
+            header += "\n  table.hline(),"
         return header + "\n"
 
     def generate_body(self):
@@ -912,8 +984,12 @@ class TypstRenderer(Renderer):
             body += "\n"
         return body
 
-    def generate_footer(self, in_figure: bool = True, include_settings: bool = False):
-        return "table.hline()\n)\n" + (")\n" * in_figure) + ("}" * include_settings)
+    def generate_footer(
+        self, in_figure: bool = True, has_override_settings: bool = False
+    ):
+        return (
+            "table.hline()\n)\n" + (")\n" * in_figure) + ("}" * has_override_settings)
+        )
 
     def _create_line(self, line):
         out = ""
