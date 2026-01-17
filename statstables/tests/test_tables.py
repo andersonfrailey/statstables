@@ -141,10 +141,12 @@ def test_model_table_linearmodels():
     data = mroz.load()
     data = data.dropna()
     data = add_constant(data, has_constant="add")
-    iv = IV2SLS(np.log(data.wage), data[["const"]], data.educ, data.fatheduc).fit(
-        cov_type="unadjusted"
+    iv = IV2SLS(
+        np.log(data.wage), data[["const"]], data.educ, data.fatheduc  # type:ignore
+    ).fit(cov_type="unadjusted")
+    ivtable = tables.ModelTable(
+        models=[iv.first_stage.individual["educ"], iv]  # type:ignore
     )
-    ivtable = tables.ModelTable(models=[iv.first_stage.individual["educ"], iv])
     ivtable.rename_covariates(
         {
             "const": "Intercept",
@@ -399,7 +401,7 @@ def test_custom_model_table(data):
 
 def compare_expected_output(
     expected_file: Path,
-    actual_table: tables.Table,
+    actual_table: tables.Table | tables.PanelTable,
     render_type: str,
     temp_file: Path,
     only_tabular: bool = False,

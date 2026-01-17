@@ -415,7 +415,7 @@ class HTMLRenderer(Renderer):
                 alignment = self.calign
                 if i == 0 and self.table.table_params["include_index"]:
                     alignment = self.ialign
-                val = self._format_value(r, alignment)
+                val = self._format_value(r, alignment=alignment)
                 if convert_latex:
                     val = replace_latex(val)
                 row_str += f"{val}\n"
@@ -440,7 +440,7 @@ class HTMLRenderer(Renderer):
                     alignment = self.calign
                     if i == 0 and self.table.table_params["include_index"]:
                         alignment = self.ialign
-                    val = self._format_value(r, alignment)
+                    val = self._format_value(r, alignment=alignment)
                     row_str += f"{val}\n"
                 row_str += "    </tr>\n"
             for line in self.table.custom_lines["after-model-stats"]:
@@ -500,7 +500,7 @@ class HTMLRenderer(Renderer):
 
         return out
 
-    def _format_value(self, formatting_dict: dict, alignment: str, **kwargs) -> str:
+    def _format_value(self, formatting_dict: dict, **kwargs) -> str:
         cell = f"      <td"
         if formatting_dict["class"]:
             _class = formatting_dict["class"]
@@ -509,7 +509,7 @@ class HTMLRenderer(Renderer):
             _id = formatting_dict["id"]
             cell += f' id="{_id}"'
         # cell style section
-        style = f' style="text-align: {alignment};'
+        style = f' style="text-align: {kwargs["alignment"]};'
         if formatting_dict["color"]:
             style += f" color: {formatting_dict['color']};"
         # close out the attributes section of the code
@@ -821,6 +821,7 @@ class ASCIIRenderer(Renderer):
             for col in self.table.columns:
                 # check label size
                 label = self.table._column_labels.get(col, col)
+                assert isinstance(label, str)
                 if convert_latex:
                     label = replace_latex(label)
                 col_size = len(str(label)) + (self.padding * 2)
