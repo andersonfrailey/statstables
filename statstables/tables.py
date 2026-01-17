@@ -83,6 +83,7 @@ class Table(ABC):
         self.custom_lines = defaultdict(list)
         self.custom_tex_lines = defaultdict(list)
         self.custom_html_lines = defaultdict(list)
+        self.custom_typst_lines = defaultdict(list)
 
     def reset_all(self, restore_to_defaults=False):
         self.reset_params(restore_to_defaults)
@@ -424,14 +425,14 @@ class Table(ABC):
         assumes the line is formatted as needed, including escape characters and
         line breaks. The provided line will be rendered as is. Note that this is
         different from the generic add_line method, which will format the line
-        to fit in either LaTeX or HTML output.
+        to render in the specified output.
 
         Parameters
         ----------
         line : str
             The line to add to the table
         location : str, optional
-            Where in the table to place the line, by default "bottom"
+            Where in the table to place the line, by default "after-body"
         """
         validate_line_location(location)
         self.custom_tex_lines[location].append(line)
@@ -548,6 +549,69 @@ class Table(ABC):
         elif index is not None:
             self.custom_html_lines[location].pop(index)
 
+    def add_typst_line(self, line: str, location: str = "after-body") -> None:
+        """
+        Add line that will only be rendered in Typst output. This method assumes
+        the line is formatted as needed. The provided line with be rendered as is.
+        Note that this is different from the generic add_line method, which will
+        format the line to render in the specified output.
+
+        Parameters
+        ----------
+        line : str
+            The line to add to the table
+        location : str, optional
+            Where in the table to place  the line, by default "after-body"
+        """
+        validate_line_location(location)
+        self.custom_typst_lines[location].append(line)
+
+    def remove_typst_line(
+        self,
+        location: str | None = None,
+        line: str | None = None,
+        index: int | None = None,
+        all: bool = False,
+    ) -> None:
+        """
+        Remove a custom Typst line. To specify which line to remove, either pass the list
+        containing the line as the 'line' parameter or the index of the line as the
+        'index' parameter.
+
+        Parameters
+        ----------
+        location : str
+            Where in the table the line is located.
+        line : list, optional
+            List containing the line elements.
+        index : int, optional
+            Index of the line in the custom line list for the specified location.
+        all : bool, optional
+            Remove all custom LaTex lines. If true and `location` = None, all custom
+            lines in every position will be removed. Otherwise only the lines
+            in the provided location are removed.
+
+        Raises
+        ------
+        ValueError
+            Raises an error if neither 'line' or 'index' are provided, or if the
+            line cannot be found in the custom lines list.
+        """
+        if location is None and all:
+            for loc in VALID_LINE_LOCATIONS:
+                self.custom_typst_lines[loc].clear()
+            return None
+        if location is None and not all:
+            raise ValueError("Either a location must be provided or all must be true")
+        validate_line_location(location)
+        if line is None and index is None:
+            raise ValueError("Either 'line' or 'index' must be provided")
+
+        if line is not None:
+            self.custom_typst_lines[location].remove(line)
+        elif index is not None:
+            self.custom_typst_lines[location].pop(index)
+
     @overload
     def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
 
@@ -595,14 +659,19 @@ class Table(ABC):
 
     @overload
     def render_html(
-        self, outfile: None, table_class: str, convert_latex: bool, *args, **kwargs
+        self,
+        outfile: None,
+        table_class: str | None,
+        convert_latex: bool,
+        *args,
+        **kwargs,
     ) -> str: ...
 
     @overload
     def render_html(
         self,
         outfile: Union[str, Path],
-        table_class: str,
+        table_class: str | None,
         convert_latex: bool,
         *args,
         **kwargs,
@@ -611,7 +680,7 @@ class Table(ABC):
     def render_html(
         self,
         outfile: Union[str, Path, None] = None,
-        table_class: str = "",
+        table_class: str | None = None,
         convert_latex: bool = True,
         *args,
         **kwargs,
@@ -652,7 +721,9 @@ class Table(ABC):
         self,
         outfile: None,
         in_figure: bool,
-        include_settings: bool,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
     ) -> str: ...
 
     @overload
@@ -660,7 +731,9 @@ class Table(ABC):
         self,
         outfile: Union[str, Path],
         in_figure: bool,
-        include_settings: bool,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
     ) -> None: ...
 
     def render_typst(
@@ -1092,9 +1165,38 @@ class MeanDifferenceTable(Table):
     ) -> str | None:
         return super().render_latex(outfile, only_tabular)
 
+    @overload
+    def render_html(
+        self,
+        outfile: Union[str, Path],
+        table_class: str | None,
+        convert_latex: bool,
+        *args,
+        **kwargs,
+    ) -> None: ...
+
+    @overload
+    def render_html(
+        self,
+        outfile: None,
+        table_class: str | None,
+        convert_latex: bool,
+        *args,
+        **kwargs,
+    ) -> str: ...
+
     @_render
-    def render_html(self, outfile=None, convert_latex=True) -> str | None:
-        return super().render_html(outfile=outfile, convert_latex=convert_latex)
+    def render_html(
+        self,
+        outfile: Union[str, Path, None] = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str | None:
+        return super().render_html(
+            outfile=outfile, table_class=table_class, convert_latex=convert_latex
+        )
 
     @_render
     def render_ascii(self, convert_latex=True) -> str:
@@ -1579,9 +1681,38 @@ class ModelTable(Table):
     ) -> Union[str, None]:
         return super().render_latex(outfile=outfile, only_tabular=only_tabular)
 
+    @overload
+    def render_html(
+        self,
+        outfile: None,
+        table_class: str | None,
+        convert_latex: bool,
+        *args,
+        **kwargs,
+    ) -> str: ...
+
+    @overload
+    def render_html(
+        self,
+        outfile: str,
+        table_class: str | None,
+        convert_latex: bool,
+        *args,
+        **kwargs,
+    ) -> None: ...
+
     @_render
-    def render_html(self, outfile=None, convert_latex: bool = True) -> Union[str, None]:
-        return super().render_html(outfile=outfile, convert_latex=convert_latex)
+    def render_html(
+        self,
+        outfile: str | None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> Union[str, None]:
+        return super().render_html(
+            outfile=outfile, table_class=table_class, convert_latex=convert_latex
+        )
 
     @_render
     def render_ascii(self, convert_latex=True) -> str:

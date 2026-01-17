@@ -241,6 +241,8 @@ class LatexRenderer(Renderer):
             row_str += self._create_line(line)
         if isinstance(self.table, st.tables.ModelTable):
             row_str += "  \\midrule\n"
+            for line in self.table.custom_tex_lines["before-model-stats"]:
+                row_str += line
             for line in self.table.custom_lines["before-model-stats"]:
                 row_str += self._create_line(line)
             stats_rows = self.table._create_stats_rows(renderer="latex")
@@ -338,7 +340,7 @@ class HTMLRenderer(Renderer):
         "right": "right",
     }
 
-    def __init__(self, table, _class):
+    def __init__(self, table, _class: str | None):
         self.table = table
         self.ncolumns = self.table.ncolumns + int(
             self.table.table_params["include_index"]
@@ -904,6 +906,7 @@ class TypstRenderer(Renderer):
             in_figure=in_figure,
             figure_params=figure_params,
             table_params=table_params,
+            override_settings=override_settings,
         )
         body = self.generate_body()
         has_override_settings = override_settings is not None
@@ -923,6 +926,9 @@ class TypstRenderer(Renderer):
         # add local scope for settings that override the main document settings
         if override_settings:
             header += "#{\n  set table(\n"
+            for param, value in override_settings.items():
+                header += f"  {param}: {value},\n"
+            header += ");\n\n["
         if in_figure:
             header += "#figure(\n"
             caption = f"  caption: [{self.table.caption}],\n"
@@ -931,7 +937,8 @@ class TypstRenderer(Renderer):
                     if param == "caption":
                         caption = ""
                     header += f"  {param}: {value},\n"
-            header += f"  {caption}"
+            if self.table.caption is not None:
+                header += f"  {caption}"
             header += "table(\n"
         else:
             header += "#table(\n"
@@ -974,8 +981,14 @@ class TypstRenderer(Renderer):
                 _col = self.table._column_labels.get(col, col)
                 header += f" [{_col}],"
             header = header[:-1] + "),"  # lop off the last comma
-            header += "\n  table.hline(),"
-        return header + "\n"
+            # header += "\n  table.hline(stroke: 0.05em),"
+
+        if self.table.custom_lines["after-columns"]:
+            for line in self.table.custom_lines["after-columns"]:
+                header += self._create_line(line)
+        if self.table.table_params["show_columns"]:
+            header += "  table.hline(stroke: 0.05em),"
+        return header
 
     def generate_body(self):
         rows = self.table._create_rows()
@@ -986,13 +999,15 @@ class TypstRenderer(Renderer):
                 body += f"[{self._format_value(r)}],"
             body += "\n"
 
-        for line in self.table.custom_tex_lines["after-body"]:
+        for line in self.table.custom_typst_lines["after-body"]:
             body += line
         for line in self.table.custom_lines["after-body"]:
             body += self._create_line(line)
 
         if isinstance(self.table, st.tables.ModelTable):
             body += "  table.hline(stroke: 0.05em),\n"
+            for line in self.table.custom_typst_lines["before-model-stats"]:
+                body += line
             for line in self.table.custom_lines["before-model-stats"]:
                 body += self._create_line(line)
             stats_rows = self.table._create_stats_rows(renderer="typst")
@@ -1001,6 +1016,8 @@ class TypstRenderer(Renderer):
                 for r in row:
                     body += f"[{self._format_value(r)}],"
                 body += "\n"
+            for line in self.table.custom_typst_lines["after-model-stats"]:
+                body += line
             for line in self.table.custom_lines["after-model-stats"]:
                 body += self._create_line(line)
         return body
@@ -1023,18 +1040,18 @@ class TypstRenderer(Renderer):
         footer += (
             "table.hline()\n)\n"
             + (f"){label}\n" * in_figure)
-            + ("}" * has_override_settings)
+            + ("]}" * has_override_settings)
         )
         return footer
 
     def _create_line(self, line):
         out = ""
         if line["deliminate"]:
-            out += "  table.hline\n"
+            out += "\n  table.hline(stroke: 0.05em),\n"
         out += f"  [{line['label']}], " * self.table.table_params["include_index"]
         for elm in line["line"]:
             out += f" [{elm}],"
-        out += "\\\\\n"
+        out += "\n"
         return out
 
     def _format_value(self, formatting_dict, **kwargs):
