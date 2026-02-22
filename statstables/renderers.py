@@ -454,6 +454,11 @@ class HTMLRenderer(Renderer):
             for line in self.table.custom_lines["after-footer"]:
                 footer += self._create_line(line, convert_latex=convert_latex)
             footer += "    </tr>\n"
+        footer += "    <tr>\n"
+        footer += (
+            "      <td colspan='100%' style='border-top: 1px solid black;'></td>\n"
+        )
+        footer += "    </tr>\n"
         if self.table.notes:
             ncols = self.table.ncolumns + self.table.table_params["include_index"]
             for note, alignment, _ in self.table.notes:
@@ -955,6 +960,13 @@ class TypstRenderer(Renderer):
         header += (
             f"  columns: {self.ncolumns},\n{col_gutter}  table.hline(stroke: 0.15em),\n"
         )
+        if self.table.panel_label is not None:
+            n = len(self.table.columns) + self.table.table_params["include_index"]
+            header += (
+                f"    table.cell([{self.table.panel_label}],"
+                + f" colspan: {n}, align: {self.table.panel_label_alignment}),\n"
+                + "   table.hline(),\n"
+            )
         if self.table.table_params["show_columns"] or self.table._multicolumns:
             header += f"  table.header("
         # multicolumns

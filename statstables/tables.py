@@ -1794,6 +1794,14 @@ class PanelTable:
         "center": "^",
         "right": ">",
     }
+    TYPST_ALIGNMENTS = {
+        "l": "left",
+        "c": "center",
+        "r": "right",
+        "left": "left",
+        "center": "center",
+        "right": "right",
+    }
 
     def __init__(
         self,
@@ -1906,6 +1914,81 @@ class PanelTable:
             self._increment_label_char()
 
         return out_str
+
+    @overload
+    def render_typst(
+        self,
+        outfile: None = None,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+        **kwargs,
+    ) -> str: ...
+    @overload
+    def render_typst(
+        self,
+        outfile: str | Path,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+        **kwargs,
+    ) -> None: ...
+
+    def render_typst(
+        self,
+        outfile: str | Path | None = None,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+        **kwargs,
+    ) -> str | None:
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+        table_str = "#figure(\n"
+        if figure_params:
+            for param, value in figure_params.items():
+                table_str += f"  {param}: {value},\n"
+        table_str += "  table(\n  columns: (100%,),\n  stroke: none,\n"
+        if table_params:
+            for param, value in table_params.items():
+                table_str += f"    {param}: {value},\n"
+        for table, label in zip(self.panels, self.panel_labels):
+            label_str = f"Panel {self.label_char}: {label}"
+            table.panel_label = label_str
+            table.panel_label_alignment = self.TYPST_ALIGNMENTS[
+                self.panel_label_alignment
+            ]
+            _typst_str = table.render_typst(outfile=None, in_figure=False)
+            assert isinstance(_typst_str, str)
+            # various changes needed to put the tables together
+            _typst_str = _typst_str.replace("#table", "table")
+            n = table.ncolumns + table.table_params["include_index"]
+            fr = ",".join(["1fr"] * n)
+            ialign = self.TYPST_ALIGNMENTS[table.table_params["index_alignment"]]
+            calign = self.TYPST_ALIGNMENTS[table.table_params["column_alignment"]]
+            align = f"({ialign}, {calign})"
+            if not table.table_params["include_index"]:
+                align = f"{calign}"
+            col_str = f"columns: ({fr}),  \n  align: {align},"
+            _typst_str = _typst_str.replace(f"columns: {n},", col_str)
+            table_str += _typst_str
+            table_str += ","
+            self._increment_label_char()
+        table_str += "\n)\n)"
+
+        if not outfile:
+            return table_str
+        Path(outfile).write_text(table_str)
+        return None
 
     def _modify_latex(self, table: Table, label: str):
         tex_str = table.render_latex(outfile=None, only_tabular=True)

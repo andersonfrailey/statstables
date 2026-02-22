@@ -267,6 +267,12 @@ def test_panel_table():
         render_type="tex",
         temp_file=Path("panel_table_actual.tex"),
     )
+    compare_expected_output(
+        expected_file=Path(CUR_PATH, "..", "..", "panel.typ"),
+        actual_table=panel,
+        render_type="typ",
+        temp_file=Path("panel_table_actual.tex"),
+    )
 
 
 def test_linear_models():
@@ -405,10 +411,13 @@ def compare_expected_output(
     render_type: str,
     temp_file: Path,
     only_tabular: bool = False,
+    in_figure: bool = False,
 ):
     match render_type:
         case "tex":
             actual_table.render_latex(temp_file, only_tabular=only_tabular)
+        case "typ":
+            actual_table.render_typst(temp_file, in_figure=in_figure)
     actual_text = temp_file.read_text()
     expected_text = expected_file.read_text()
     msg = f"Output has changed. New output in {str(temp_file)}"
