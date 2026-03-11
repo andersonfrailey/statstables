@@ -141,10 +141,12 @@ def test_model_table_linearmodels():
     data = mroz.load()
     data = data.dropna()
     data = add_constant(data, has_constant="add")
-    iv = IV2SLS(np.log(data.wage), data[["const"]], data.educ, data.fatheduc).fit(
-        cov_type="unadjusted"
+    iv = IV2SLS(
+        np.log(data.wage), data[["const"]], data.educ, data.fatheduc  # type:ignore
+    ).fit(cov_type="unadjusted")
+    ivtable = tables.ModelTable(
+        models=[iv.first_stage.individual["educ"], iv]  # type:ignore
     )
-    ivtable = tables.ModelTable(models=[iv.first_stage.individual["educ"], iv])
     ivtable.rename_covariates(
         {
             "const": "Intercept",
@@ -263,6 +265,12 @@ def test_panel_table():
         expected_file=Path(CUR_PATH, "..", "..", "panel.tex"),
         actual_table=panel,
         render_type="tex",
+        temp_file=Path("panel_table_actual.tex"),
+    )
+    compare_expected_output(
+        expected_file=Path(CUR_PATH, "..", "..", "panel.typ"),
+        actual_table=panel,
+        render_type="typ",
         temp_file=Path("panel_table_actual.tex"),
     )
 
@@ -399,14 +407,17 @@ def test_custom_model_table(data):
 
 def compare_expected_output(
     expected_file: Path,
-    actual_table: tables.Table,
+    actual_table: tables.Table | tables.PanelTable,
     render_type: str,
     temp_file: Path,
     only_tabular: bool = False,
+    in_figure: bool = False,
 ):
     match render_type:
         case "tex":
             actual_table.render_latex(temp_file, only_tabular=only_tabular)
+        case "typ":
+            actual_table.render_typst(temp_file, in_figure=in_figure)
     actual_text = temp_file.read_text()
     expected_text = expected_file.read_text()
     msg = f"Output has changed. New output in {str(temp_file)}"

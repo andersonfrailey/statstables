@@ -1,25 +1,39 @@
 import copy
 import numbers
-import pandas as pd
-import numpy as np
-import statstables as st
-import narwhals as nw
-from narwhals.typing import IntoDataFrame
 from abc import ABC, abstractmethod
-from scipy import stats
-from typing import Union, Callable, overload
-from collections import defaultdict, ChainMap
+from collections import ChainMap, defaultdict
 from pathlib import Path
-from .renderers import LatexRenderer, HTMLRenderer, ASCIIRenderer
-from .utils import pstars, validate_line_location, VALID_LINE_LOCATIONS, latex_preamble
-from .parameters import TableParams, MeanDiffsTableParams, ModelTableParams
+from typing import Callable, Hashable, overload
+
+import narwhals as nw
+import numpy as np
+import pandas as pd
+from narwhals.typing import IntoDataFrame
+from scipy import stats
+
+import statstables as st
+
 from .cellformatting import DEFAULT_FORMATS, validate_format_dict
+from .parameters import MeanDiffsTableParams, ModelTableParams, TableParams
+from .renderers import ASCIIRenderer, HTMLRenderer, LatexRenderer, TypstRenderer
+from .utils import VALID_LINE_LOCATIONS, latex_preamble, pstars, validate_line_location
 
 
 class Table(ABC):
     """
     Abstract class for defining common characteristics/methods of all tables
     """
+
+    columns: list
+    _multicolumns: list[dict]
+    _index_labels: dict[str, str]
+    _column_labels: dict[str, str]
+    notes: list
+    _formatters: dict[tuple | str, Callable]
+    custom_lines: defaultdict[str | None, list]
+    custom_tex_lines: defaultdict[str | None, list]
+    custom_html_lines: defaultdict[str | None, list]
+    custom_typst_lines: defaultdict[str | None, list]
 
     def __init__(
         self,
@@ -83,6 +97,7 @@ class Table(ABC):
         self.custom_lines = defaultdict(list)
         self.custom_tex_lines = defaultdict(list)
         self.custom_html_lines = defaultdict(list)
+        self.custom_typst_lines = defaultdict(list)
 
     def reset_all(self, restore_to_defaults=False):
         self.reset_params(restore_to_defaults)
@@ -143,7 +158,7 @@ class Table(ABC):
 
         Parameters
         ----------
-        columns : Union[str, list[str]]
+        columns : str | list[str]]
             If a single string is provided, it will span the entire table. If a list
             is provided, each will span the number of columns in the corresponding
             index of the spans list.
@@ -175,6 +190,7 @@ class Table(ABC):
             sum(spans) == _n_cols
         ), f"The sum of spans must equal the number of columns. There are {self.ncolumns} columns, but spans sum to {sum(spans)}"
         _position = len(self._multicolumns) if position is None else position
+        # TODO: Convert this into a class. should help with typing and clarrity
         row = {
             "columns": columns,
             "spans": spans,
@@ -298,7 +314,10 @@ class Table(ABC):
                 raise ValueError(f"Note {i} yields error {e}")
 
     def remove_note(
-        self, note: str | None = None, index: int | None = None, all: bool = False
+        self,
+        note: str | None = None,
+        index: int | None = None,
+        remove_all: bool = False,
     ) -> None:
         """
         Removes a note that has been added to the table. To specify which note,
@@ -311,7 +330,7 @@ class Table(ABC):
             Text of note to remove, by default None
         index : int, optional
             Index of the note to be removed, by default None
-        all : bool, optional
+        remove_all : bool, optional
             If true, remove all notes from the table
 
         Raises
@@ -319,7 +338,7 @@ class Table(ABC):
         ValueError
             Raises and error if neither 'note' or 'index' are provided
         """
-        if all:
+        if remove_all:
             self.notes.clear()
             return None
         if note is None and index is None:
@@ -423,14 +442,14 @@ class Table(ABC):
         assumes the line is formatted as needed, including escape characters and
         line breaks. The provided line will be rendered as is. Note that this is
         different from the generic add_line method, which will format the line
-        to fit in either LaTeX or HTML output.
+        to render in the specified output.
 
         Parameters
         ----------
         line : str
             The line to add to the table
         location : str, optional
-            Where in the table to place the line, by default "bottom"
+            Where in the table to place the line, by default "after-body"
         """
         validate_line_location(location)
         self.custom_tex_lines[location].append(line)
@@ -440,7 +459,7 @@ class Table(ABC):
         location: str | None = None,
         line: str | None = None,
         index: int | None = None,
-        all: bool = False,
+        remove_all: bool = False,
     ) -> None:
         """
         Remove a custom LaTex line. To specify which line to remove, either pass the list
@@ -455,7 +474,7 @@ class Table(ABC):
             List containing the line elements.
         index : int, optional
             Index of the line in the custom line list for the specified location.
-        all : bool, optional
+        remove_all : bool, optional
             Remove all custom LaTex lines. If true and `location` = None, all custom
             lines in every position will be removed. Otherwise only the lines
             in the provided location are removed.
@@ -466,11 +485,11 @@ class Table(ABC):
             Raises an error if neither 'line' or 'index' are provided, or if the
             line cannot be found in the custom lines list.
         """
-        if location is None and all:
+        if location is None and remove_all:
             for loc in VALID_LINE_LOCATIONS:
                 self.custom_tex_lines[loc].clear()
             return None
-        if location is None and not all:
+        if location is None and not remove_all:
             raise ValueError("Either a location must be provided or all must be true")
         validate_line_location(location)
         if line is None and index is None:
@@ -506,7 +525,7 @@ class Table(ABC):
         location: str | None = None,
         line: str | None = None,
         index: int | None = None,
-        all: bool = False,
+        remove_all: bool = False,
     ):
         """
         Remove a custom HTML line. To specify which line to remove, either pass the list
@@ -521,7 +540,7 @@ class Table(ABC):
             List containing the line elements.
         index : int, optional
             Index of the line in the custom line list for the specified location.
-        all : bool, optional
+        remove_all : bool, optional
             Remove all custom LaTex lines. If true and `location` = None, all custom
             lines in every position will be removed. Otherwise only the lines
             in the provided location are removed.
@@ -532,11 +551,11 @@ class Table(ABC):
             Raises an error if neither 'line' or 'index' are provided, or if the
             line cannot be found in the custom lines list.
         """
-        if location is None and all:
+        if location is None and remove_all:
             for loc in VALID_LINE_LOCATIONS:
                 self.custom_html_lines[loc].clear()
             return None
-        if location is None and not all:
+        if location is None and not remove_all:
             raise ValueError("Either a location must be provided or all must be true")
         validate_line_location(location)
         if line is None and index is None:
@@ -547,16 +566,78 @@ class Table(ABC):
         elif index is not None:
             self.custom_html_lines[location].pop(index)
 
-    @overload
-    def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
+    def add_typst_line(self, line: str, location: str = "after-body") -> None:
+        """
+        Add line that will only be rendered in Typst output. This method assumes
+        the line is formatted as needed. The provided line with be rendered as is.
+        Note that this is different from the generic add_line method, which will
+        format the line to render in the specified output.
+
+        Parameters
+        ----------
+        line : str
+            The line to add to the table
+        location : str, optional
+            Where in the table to place  the line, by default "after-body"
+        """
+        validate_line_location(location)
+        self.custom_typst_lines[location].append(line)
+
+    def remove_typst_line(
+        self,
+        location: str | None = None,
+        line: str | None = None,
+        index: int | None = None,
+        remove_all: bool = False,
+    ) -> None:
+        """
+        Remove a custom Typst line. To specify which line to remove, either pass the list
+        containing the line as the 'line' parameter or the index of the line as the
+        'index' parameter.
+
+        Parameters
+        ----------
+        location : str
+            Where in the table the line is located.
+        line : list, optional
+            List containing the line elements.
+        index : int, optional
+            Index of the line in the custom line list for the specified location.
+        remove_all : bool, optional
+            Remove all custom LaTex lines. If true and `location` = None, all custom
+            lines in every position will be removed. Otherwise only the lines
+            in the provided location are removed.
+
+        Raises
+        ------
+        ValueError
+            Raises an error if neither 'line' or 'index' are provided, or if the
+            line cannot be found in the custom lines list.
+        """
+        if location is None and remove_all:
+            for loc in VALID_LINE_LOCATIONS:
+                self.custom_typst_lines[loc].clear()
+            return None
+        if location is None and not remove_all:
+            raise ValueError("Either a location must be provided or all must be true")
+        validate_line_location(location)
+        if line is None and index is None:
+            raise ValueError("Either 'line' or 'index' must be provided")
+
+        if line is not None:
+            self.custom_typst_lines[location].remove(line)
+        elif index is not None:
+            self.custom_typst_lines[location].pop(index)
 
     @overload
-    def render_latex(self, outfile: Union[str, Path], only_tabular: bool) -> None: ...
+    def render_latex(self, outfile: None = None, only_tabular: bool = False) -> str: ...
+    @overload
+    def render_latex(self, outfile: str | Path, only_tabular: bool = False) -> None: ...
 
     def render_latex(
         self,
-        outfile: Union[str, Path, None] = None,
-        only_tabular=False,
+        outfile: str | Path | None = None,
+        only_tabular: bool = False,
         *args,
         **kwargs,
     ) -> str | None:
@@ -577,7 +658,7 @@ class Table(ABC):
 
         Returns
         -------
-        Union[str, None]
+        str | None
             If an outfile is not specified, the LaTeX string will be returned.
             Otherwise None will be returned.
         """
@@ -592,11 +673,30 @@ class Table(ABC):
         Path(outfile).write_text(tex_str)
         return None
 
+    @overload
     def render_html(
         self,
-        outfile: Union[str, Path, None] = None,
-        table_class="",
-        convert_latex=True,
+        outfile: None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str: ...
+    @overload
+    def render_html(
+        self,
+        outfile: str | Path,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> None: ...
+
+    def render_html(
+        self,
+        outfile: str | Path | None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
         *args,
         **kwargs,
     ) -> str | None:
@@ -616,7 +716,7 @@ class Table(ABC):
 
         Returns
         -------
-        Union[str, None]
+        str| None
             If an outfile is not specified, the HTML string will be returned.
             Otherwise None will be returned.
         """
@@ -628,8 +728,72 @@ class Table(ABC):
         Path(outfile).write_text(html_str)
         return None
 
-    def render_ascii(self, convert_latex=True) -> str:
+    def render_ascii(self, convert_latex: bool = True) -> str:
         return ASCIIRenderer(self).render(convert_latex=convert_latex)
+
+    @overload
+    def render_typst(
+        self,
+        outfile: None = None,
+        in_figure: bool = False,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+    ) -> str: ...
+    @overload
+    def render_typst(
+        self,
+        outfile: str | Path,
+        in_figure: bool = False,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+    ) -> None: ...
+
+    def render_typst(
+        self,
+        outfile: str | Path | None = None,
+        in_figure: bool = False,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+    ) -> str | None:
+        """
+        Render table formatted for typst documents
+
+        Parameters
+        ----------
+        outfile : str | Path | None, optional
+            File name or file path to save the table to, by default None
+        in_figure : bool, optional
+            If true, wraps the table in a figure function, by default False
+        figure_params : dict | None, optional
+            Parameters to pass into the figure function. Note: statstables does
+            not validate the parameters included in this dictionary, by default None
+        table_params : dict | None, optional
+            Parameters to pass into the table function. Note: statstables does
+            not valuidate the parameters included in this dictionary, by default None
+        override_settings : dict | None, optional
+            Settings that can be used to override any default table settings in
+            your typst document, by default None
+
+        Returns
+        -------
+        str | None
+            If an outfile is not specified, the table is returned as a string
+            suitable for a typst document. Otherwise the table will save the
+            table to the specified file and return none.
+        """
+        typst_str = TypstRenderer(self).render(
+            in_figure=in_figure,
+            figure_params=figure_params,
+            table_params=table_params,
+            override_settings=override_settings,
+        )
+        if not outfile:
+            return typst_str
+        Path(outfile).write_text(typst_str)
+        return None
 
     def __str__(self) -> str:
         return self.render_ascii()
@@ -640,7 +804,7 @@ class Table(ABC):
     def _repr_html_(self):
         return self.render_html()
 
-    def _default_formatter(self, value: Union[int, float, str], **kwargs) -> str:
+    def _default_formatter(self, value: int | float | str, **kwargs) -> str:
         thousands_sep = self.table_params["thousands_sep"]
         sig_digits = self.table_params["sig_digits"]
         # format the numbers, otherwise just return a string
@@ -652,17 +816,21 @@ class Table(ABC):
 
     def _format_value(
         self,
-        _index: str | int | None,
-        col: str | int | None,
-        value: Union[int, float, str],
+        _index: str | int | Hashable | None,
+        col: str | int | Hashable | None,
+        value: int | float | str,
         **kwargs,
     ) -> ChainMap:
         if (_index, col) in self._formatters.keys():
             formatter = self._formatters[(_index, col)]
         elif _index in self._formatters.keys():
-            formatter = self._formatters.get(_index, self._default_formatter)
+            formatter = self._formatters.get(
+                _index, self._default_formatter  # type:ignore
+            )
         elif col in self._formatters.keys():
-            formatter = self._formatters.get(col, self._default_formatter)
+            formatter = self._formatters.get(
+                col, self._default_formatter  # type:ignore
+            )
         else:
             formatter = self.default_formatter
         # for if the row is blank
@@ -778,7 +946,7 @@ class GenericTable(Table):
     def __init__(self, df: IntoDataFrame, **kwargs):
         self.df = nw.from_native(df).to_pandas()
         self.ncolumns = self.df.shape[1]
-        self.columns = self.df.columns
+        self.columns = list(self.df.columns)
         self.nrows = self.df.shape[0]
         super().__init__(**kwargs)
 
@@ -793,7 +961,9 @@ class GenericTable(Table):
         for _index, row in self.df.iterrows():
             _row = [
                 self._format_value(
-                    f"{_index}_label", "_index", self._index_labels.get(_index, _index)
+                    f"{_index}_label",
+                    "_index",
+                    self._index_labels.get(_index, _index),  # type:ignore
                 )
             ]
             for col, value in zip(row.index, row.values):
@@ -912,7 +1082,7 @@ class MeanDifferenceTable(Table):
         self._get_diffs()
         self.ncolumns = self.means.shape[1]
         # convert columns to strings to avoid issues with numerical groups
-        self.columns = self.means.columns.astype(str)
+        self.columns = list(self.means.columns.astype(str))
         self.reset_custom_features()
         self.rename_columns(column_labels)
         self.rename_index(index_labels)
@@ -1004,23 +1174,52 @@ class MeanDifferenceTable(Table):
         return wrapper
 
     @overload
-    def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
-
+    def render_latex(self, outfile: None = None, only_tabular: bool = False) -> str: ...
     @overload
-    def render_latex(self, outfile: Union[str, Path], only_tabular: bool) -> None: ...
+    def render_latex(self, outfile: str | Path, only_tabular: bool = False) -> None: ...
 
     @_render
     def render_latex(
-        self, outfile: Union[str, Path, None] = None, only_tabular: bool = False
+        self,
+        outfile: str | Path | None = None,
+        only_tabular: bool = False,
     ) -> str | None:
         return super().render_latex(outfile, only_tabular)
 
-    @_render
-    def render_html(self, outfile=None, convert_latex=True) -> str | None:
-        return super().render_html(outfile=outfile, convert_latex=convert_latex)
+    @overload
+    def render_html(
+        self,
+        outfile: None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str: ...
+    @overload
+    def render_html(
+        self,
+        outfile: str | Path,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> None: ...
 
     @_render
-    def render_ascii(self, convert_latex=True) -> str:
+    def render_html(
+        self,
+        outfile: str | Path | None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str | None:
+        return super().render_html(
+            outfile=outfile, table_class=table_class, convert_latex=convert_latex
+        )
+
+    @_render
+    def render_ascii(self, convert_latex: bool = True) -> str:
         return super().render_ascii(convert_latex=convert_latex)
 
     def _get_diffs(self):
@@ -1068,13 +1267,15 @@ class MeanDifferenceTable(Table):
             sem_row = [self._format_value(f"{_index}_label", "_index", "")]
             _row = [
                 self._format_value(
-                    f"{_index}_label", "_index", self._index_labels.get(_index, _index)
+                    f"{_index}_label",
+                    "_index",
+                    self._index_labels.get(_index, _index),  # type:ignore
                 )
             ]
             for col, value in zip(row.index, row.values):
                 # pull standard error and p-value
                 try:
-                    se = self.sem.loc[_index, col]
+                    se = self.sem.loc[_index, col]  # type:ignore
                 except KeyError:
                     se = None
                 try:
@@ -1086,7 +1287,7 @@ class MeanDifferenceTable(Table):
                 )
                 if self.table_params["show_standard_errors"]:
                     try:
-                        se = self.sem.loc[_index, col]
+                        se = self.sem.loc[_index, col]  # type:ignore
                         formatted_se = copy.copy(formatted_val)
                         # formatted_se = self._format_value(_index, col, se)
                         formatted_se["value"] = (
@@ -1134,18 +1335,30 @@ class SummaryTable(GenericTable):
 
 
 class ModelTable(Table):
+    all_param_labels: list[str]
+    param_labels: list[str]
     # stats that get included in the table footer
     # configuration  is (name of the attribute, label, whether it has a p-value)
     model_stats = [
         ("observations", "Observations", False),
         ("ngroups", "N. Groups", False),
-        ("r2", {"latex": "$R^2$", "html": "R<sup>2</sup>", "ascii": "R^2"}, False),
+        (
+            "r2",
+            {
+                "latex": "$R^2$",
+                "html": "R<sup>2</sup>",
+                "ascii": "R^2",
+                "typst": "$R^2$",
+            },
+            False,
+        ),
         (
             "adjusted_r2",
             {
                 "latex": "Adjusted $R^2$",
                 "html": "Adjusted R<sup>2</sup>",
                 "ascii": "Adjusted R^2",
+                "typst": "Adjusted $R^2$",
             },
             False,
         ),
@@ -1155,6 +1368,7 @@ class ModelTable(Table):
                 "latex": "Pseudo $R^2$",
                 "html": "Pseudo R<sup>2</sup>",
                 "ascii": "Pseudo R^2",
+                "typst": "Pseudo $R^2$",
             },
             False,
         ),
@@ -1315,7 +1529,7 @@ class ModelTable(Table):
         """
         self.parameter_order(order)
 
-    def parameter_order(self, order: list | None) -> None:
+    def parameter_order(self, order: list[str] | None) -> None:
         """
         Set the order of the parameters in the table. An error will be raised if
         the parameter is not in any of the models.
@@ -1450,6 +1664,7 @@ class ModelTable(Table):
         """
 
         def wrapper(self, *args, **kwargs):
+            _stars_note = ""
             if (
                 self.table_params["show_significance_levels"]
                 and self.table_params["show_stars"]
@@ -1480,23 +1695,50 @@ class ModelTable(Table):
         return wrapper
 
     @overload
-    def render_latex(self, outfile: None, only_tabular: bool) -> str: ...
-
+    def render_latex(self, outfile: None = None, only_tabular: bool = False) -> str: ...
     @overload
-    def render_latex(self, outfile: Union[str, Path], only_tabular: bool) -> None: ...
+    def render_latex(self, outfile: str | Path, only_tabular: bool = False) -> None: ...
 
     @_render
     def render_latex(
-        self, outfile: Union[str, Path, None] = None, only_tabular=False
-    ) -> Union[str, None]:
+        self, outfile: str | Path | None = None, only_tabular: bool = False
+    ) -> str | None:
         return super().render_latex(outfile=outfile, only_tabular=only_tabular)
 
-    @_render
-    def render_html(self, outfile=None, convert_latex: bool = True) -> Union[str, None]:
-        return super().render_html(outfile=outfile, convert_latex=convert_latex)
+    @overload
+    def render_html(
+        self,
+        outfile: None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str: ...
+    @overload
+    def render_html(
+        self,
+        outfile: str,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> None: ...
 
     @_render
-    def render_ascii(self, convert_latex=True) -> str:
+    def render_html(
+        self,
+        outfile: str | None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str | None:
+        return super().render_html(
+            outfile=outfile, table_class=table_class, convert_latex=convert_latex
+        )
+
+    @_render
+    def render_ascii(self, convert_latex: bool = True) -> str:
         return super().render_ascii(convert_latex=convert_latex)
 
     ##### Properties #####
@@ -1552,6 +1794,14 @@ class PanelTable:
         "center": "^",
         "right": ">",
     }
+    TYPST_ALIGNMENTS = {
+        "l": "left",
+        "c": "center",
+        "r": "right",
+        "left": "left",
+        "center": "center",
+        "right": "right",
+    }
 
     def __init__(
         self,
@@ -1582,7 +1832,12 @@ class PanelTable:
         assert panel_label_alignment in self.VALID_ALIGNMENTS
         self.panel_label_alignment = panel_label_alignment
 
-    def render_latex(self, outfile, **kwargs) -> str | None:
+    @overload
+    def render_latex(self, outfile: None = None, **kwargs) -> str: ...
+    @overload
+    def render_latex(self, outfile: str | Path, **kwargs) -> None: ...
+
+    def render_latex(self, outfile: str | Path | None = None, **kwargs) -> str | None:
         # assign multicolumns to each table
         match self.enumerate_type:
             case "alpha_upper":
@@ -1604,7 +1859,7 @@ class PanelTable:
             label_str = f"Panel {self.label_char}: {label}"
             table.panel_label = label_str
             table.panel_label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
-            _tex_str = table.render_latex(only_tabular=True)
+            _tex_str = table.render_latex(outfile=None, only_tabular=True)
             assert isinstance(_tex_str, str)
             if i < self.npanels - 1:
                 # add space between previous panel and label for next one
@@ -1623,7 +1878,7 @@ class PanelTable:
         Path(outfile).write_text(tex_str)
         return None
 
-    def render_ascii(self) -> str:
+    def render_ascii(self, convert_latex: bool = True) -> str:
         # assign multicolumns to each table
         match self.enumerate_type:
             case "alpha_upper":
@@ -1654,14 +1909,89 @@ class PanelTable:
             _label = f"Panel {self.label_char}) {label}"
             label_align = self.ASCII_ALIGNMENTS[self.panel_label_alignment]
             label_str = f"{_label:{label_align}{max_width}}\n"
-            table_str = table.render_ascii()
+            table_str = table.render_ascii(convert_latex=convert_latex)
             out_str += label_str + table_str + "\n"
             self._increment_label_char()
 
         return out_str
 
+    @overload
+    def render_typst(
+        self,
+        outfile: None = None,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+        **kwargs,
+    ) -> str: ...
+    @overload
+    def render_typst(
+        self,
+        outfile: str | Path,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+        **kwargs,
+    ) -> None: ...
+
+    def render_typst(
+        self,
+        outfile: str | Path | None = None,
+        figure_params: dict | None = None,
+        table_params: dict | None = None,
+        override_settings: dict | None = None,
+        **kwargs,
+    ) -> str | None:
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+        table_str = "#figure(\n"
+        if figure_params:
+            for param, value in figure_params.items():
+                table_str += f"  {param}: {value},\n"
+        table_str += "  table(\n  columns: (100%,),\n  stroke: none,\n"
+        if table_params:
+            for param, value in table_params.items():
+                table_str += f"    {param}: {value},\n"
+        for table, label in zip(self.panels, self.panel_labels):
+            label_str = f"Panel {self.label_char}: {label}"
+            table.panel_label = label_str
+            table.panel_label_alignment = self.TYPST_ALIGNMENTS[
+                self.panel_label_alignment
+            ]
+            _typst_str = table.render_typst(outfile=None, in_figure=False)
+            assert isinstance(_typst_str, str)
+            # various changes needed to put the tables together
+            _typst_str = _typst_str.replace("#table", "table")
+            n = table.ncolumns + table.table_params["include_index"]
+            fr = ",".join(["1fr"] * n)
+            ialign = self.TYPST_ALIGNMENTS[table.table_params["index_alignment"]]
+            calign = self.TYPST_ALIGNMENTS[table.table_params["column_alignment"]]
+            align = f"({ialign}, {calign})"
+            if not table.table_params["include_index"]:
+                align = f"{calign}"
+            col_str = f"columns: ({fr}),  \n  align: {align},"
+            _typst_str = _typst_str.replace(f"columns: {n},", col_str)
+            table_str += _typst_str
+            table_str += ","
+            self._increment_label_char()
+        table_str += "\n)\n)"
+
+        if not outfile:
+            return table_str
+        Path(outfile).write_text(table_str)
+        return None
+
     def _modify_latex(self, table: Table, label: str):
-        tex_str = table.render_latex(only_tabular=True)
+        tex_str = table.render_latex(outfile=None, only_tabular=True)
         out_str = tex_str.replace("\\begin{tabular}\n", "")
         new_start = "\\begin{tabular}\n"
         ncols = len(table.columns) + int(table.table_params["include_index"])

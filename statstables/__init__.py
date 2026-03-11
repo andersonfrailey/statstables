@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Hashable
 from statstables import (
     tables,
     renderers,
@@ -45,12 +45,12 @@ class SupportedModelsClass(dict):
     def _keyname(key: str):
         return key.replace("<class '", "").replace("'>", "")
 
-    def __setitem__(self, key: str, value: Any):
+    def __setitem__(self, key: Hashable, value: Any):
         msg = "Custom models must inherit from the ModelData class"
         assert value.__base__ == modeltables.ModelData, msg
         self.models[key] = value
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: Hashable):
         # custom models will be saved with their type as the key, but the natively
         # supported models are passed in as strings (see initialization below)
         # so they will be found in the first exception
