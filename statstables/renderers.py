@@ -530,7 +530,7 @@ class HTMLRenderer(Renderer):
             end += "</em>"
         val = formatting_dict["value"]
         # create full cell
-        cell += f"{start}{val}{end}</td>\n"
+        cell += f"{start}{val}{end}</td>"
         return cell
 
 

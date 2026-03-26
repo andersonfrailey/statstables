@@ -1850,11 +1850,13 @@ class PanelTable:
                 self.label_char = "i"
             case _:
                 self.label_char = ""
-        tex_str = ""
+        tex_str = "\\toprule\n"
+        if self.panels[0].table_params["double_top_rule"]:
+            tex_str += "\\toprule\n"
         for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
-            # if it is not the first table, turn off double top rule
-            if i != 0:
-                table.table_params["double_top_rule"] = False
+            # turn off double top rule to make it look more neat
+            double_top_rule = table.table_params["double_top_rule"]
+            table.table_params["double_top_rule"] = False
             # add multicolumn to the table
             label_str = f"Panel {self.label_char}: {label}"
             table.panel_label = label_str
@@ -1870,6 +1872,8 @@ class PanelTable:
                 )
             tex_str += "\n" + _tex_str
             self._increment_label_char()
+            # reset changed settings
+            table.table_params["double_top_rule"] = double_top_rule
 
         if not outfile:
             return tex_str
@@ -1900,11 +1904,16 @@ class PanelTable:
             max_width = max(max_width, table_size)
 
         # loop through the tables and actually make them. add all together for panels
-        out_str = ""
+        top_rule_char = self.panels[0].table_params["ascii_header_char"]
+        out_str = top_rule_char * max_width
         for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
             # if it is not the first table, turn off double top rule
+            # TODO: Reconsider. may be reasonable to leave to user setting
+            original_top_rule = table.table_params["double_top_rule"] = False
+            orginal_header_char = table.table_params["ascii_header_char"] = "-"
             if i != 0:
                 table.table_params["double_top_rule"] = False
+                table.table_params["ascii_header_char"] = "-"
             # add multicolumn to the table
             _label = f"Panel {self.label_char}) {label}"
             label_align = self.ASCII_ALIGNMENTS[self.panel_label_alignment]
@@ -1912,8 +1921,72 @@ class PanelTable:
             table_str = table.render_ascii(convert_latex=convert_latex)
             out_str += label_str + table_str + "\n"
             self._increment_label_char()
+            # reset changed parameters
+            table.table_params["double_top_rule"] = original_top_rule
+            table.table_params["ascii_header_char"] = orginal_header_char
 
         return out_str
+
+    @overload
+    def render_html(
+        self,
+        outfile: None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str: ...
+    @overload
+    def render_html(
+        self,
+        outfile: str | Path,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> None: ...
+
+    def render_html(
+        self,
+        outfile: str | Path | None = None,
+        table_class: str | None = None,
+        convert_latex: bool = True,
+        *args,
+        **kwargs,
+    ) -> str | None:
+        match self.enumerate_type:
+            case "alpha_upper":
+                self.label_char = "A"
+            case "alpha_lower":
+                self.label_char = "a"
+            case "int":
+                self.label_char = "1"
+            case "roman":
+                self.label_char = "i"
+            case _:
+                self.label_char = ""
+
+        table_str = "<table>\n"
+        if table_class:
+            table_str = f'<table class = "{table_class}">\n'
+        for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
+            _label = f"Panel {self.label_char}) {label}"
+            _table = table.render_html(convert_latex=convert_latex)
+            # strip out original table bounds
+            _table = _table.replace("<table>\n", "").replace("</table>", "")
+            table_str += (
+                f'<thead>\n    <th style="text-align:left;">{_label}</th></thead>\n'
+            )
+            table_str += _table
+            # deliminate panels
+            if i != len(self.panels) - 1:
+                table_str += "      <td colspan='100%' style='border-top: 1px solid black;'></td>\n"
+            self._increment_label_char()
+        table_str += "</table>"
+        if not outfile:
+            return table_str
+        Path(outfile).write_text(table_str)
+        return None
 
     @overload
     def render_typst(
