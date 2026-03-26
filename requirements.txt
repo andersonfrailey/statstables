@@ -6,3 +6,4 @@ Faker
 narwhals
 polars
 pyarrow
+narwhals
