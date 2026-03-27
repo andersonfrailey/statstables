@@ -1,4 +1,5 @@
 import copy
+import math
 import numbers
 from abc import ABC, abstractmethod
 from collections import ChainMap, defaultdict
@@ -15,7 +16,13 @@ import statstables as st
 
 from .cellformatting import DEFAULT_FORMATS, validate_format_dict
 from .parameters import MeanDiffsTableParams, ModelTableParams, TableParams
-from .renderers import ASCIIRenderer, HTMLRenderer, LatexRenderer, TypstRenderer
+from .renderers import (
+    ASCIIRenderer,
+    HTMLRenderer,
+    LatexRenderer,
+    TypstRenderer,
+    ASCIIWidths,
+)
 from .utils import VALID_LINE_LOCATIONS, latex_preamble, pstars, validate_line_location
 
 
@@ -1812,8 +1819,6 @@ class PanelTable:
     ):
         for table in panels:
             assert isinstance(table, Table)
-            # must use tabularx to get alignment right
-            table.table_params["use_tabularx"] = True
         self.npanels = len(panels)
         nlabels = len(panel_labels)
         if len(panels) > len(panel_labels):
@@ -1850,19 +1855,29 @@ class PanelTable:
                 self.label_char = "i"
             case _:
                 self.label_char = ""
-        tex_str = "\\toprule\n"
-        if self.panels[0].table_params["double_top_rule"]:
-            tex_str += "\\toprule\n"
+        # tex_str = "\\toprule\n"
+        # if self.panels[0].table_params["double_top_rule"]:
+        #     tex_str += "\\toprule\n"
+        tex_str = ""
         for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
             # turn off double top rule to make it look more neat
             double_top_rule = table.table_params["double_top_rule"]
             table.table_params["double_top_rule"] = False
+            tabularx_rule = table.table_params["use_tabularx"]
+            # must use tabularx to get alignment right
+            table.table_params["use_tabularx"] = True
             # add multicolumn to the table
             label_str = f"Panel {self.label_char}: {label}"
             table.panel_label = label_str
             table.panel_label_alignment = self.ALIGNMENTS[self.panel_label_alignment]
             _tex_str = table.render_latex(outfile=None, only_tabular=True)
             assert isinstance(_tex_str, str)
+            # put top rule over first panel label
+            if i == 0:
+                new_str = "X}\n  \\toprule\n"
+                if double_top_rule:
+                    new_str += "  \\toprule\n"
+                _tex_str = _tex_str.replace("X}\n", new_str)
             if i < self.npanels - 1:
                 # add space between previous panel and label for next one
                 # except for the very last panel
@@ -1874,6 +1889,7 @@ class PanelTable:
             self._increment_label_char()
             # reset changed settings
             table.table_params["double_top_rule"] = double_top_rule
+            table.table_params["use_tabularx"] = tabularx_rule
 
         if not outfile:
             return tex_str
@@ -1897,32 +1913,49 @@ class PanelTable:
                 self.label_char = ""
         # get all the table widths to know how large to make panels
         max_width = 0
+        max_index = 0
+        border_lens = []
         for table in self.panels:
             renderer = ASCIIRenderer(table)
             renderer._get_table_widths()
             table_size = renderer._len + (2 * renderer._border_len)
+            border_lens.append(2 * renderer._border_len)
             max_width = max(max_width, table_size)
+            max_index = max(max_index, renderer.max_index_name_cell_size)
 
         # loop through the tables and actually make them. add all together for panels
         top_rule_char = self.panels[0].table_params["ascii_header_char"]
-        out_str = top_rule_char * max_width
+        out_str = top_rule_char * max_width + "\n"
         for i, (table, label) in enumerate(zip(self.panels, self.panel_labels)):
             # if it is not the first table, turn off double top rule
             # TODO: Reconsider. may be reasonable to leave to user setting
-            original_top_rule = table.table_params["double_top_rule"] = False
-            orginal_header_char = table.table_params["ascii_header_char"] = "-"
-            if i != 0:
-                table.table_params["double_top_rule"] = False
-                table.table_params["ascii_header_char"] = "-"
+            original_top_rule = table.table_params["ascii_double_top_rule"]
+            orginal_header_char = table.table_params["ascii_header_char"]
+            table.table_params["ascii_double_top_rule"] = False
+            table.table_params["ascii_header_char"] = "-"
             # add multicolumn to the table
             _label = f"Panel {self.label_char}) {label}"
             label_align = self.ASCII_ALIGNMENTS[self.panel_label_alignment]
             label_str = f"{_label:{label_align}{max_width}}\n"
-            table_str = table.render_ascii(convert_latex=convert_latex)
+            # set table widths
+            # calculate the width not used for the index or border
+            remainder = max_width - max_index - border_lens[i]
+            colsize = remainder / table.ncolumns
+            _len = max_width - border_lens[i]
+            widths = ASCIIWidths(
+                max_body_cell_size=math.ceil(colsize),
+                max_index_name_cell_size=math.ceil(max_index),
+                _len=math.ceil(_len),
+                _border_len=border_lens[i],
+            )
+            renderer = ASCIIRenderer(table)
+            table_str = renderer.render(
+                convert_latex=convert_latex, table_widths=widths
+            )
             out_str += label_str + table_str + "\n"
             self._increment_label_char()
             # reset changed parameters
-            table.table_params["double_top_rule"] = original_top_rule
+            table.table_params["ascii_double_top_rule"] = original_top_rule
             table.table_params["ascii_header_char"] = orginal_header_char
 
         return out_str
