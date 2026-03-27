@@ -36,6 +36,7 @@ dependencies = [
     "pandas>=2",
     "scipy",
     "unicodeit",
+    "narwhals",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +51,7 @@ test = [
     "faker",
     "polars",
     "pyarrow",
+    "narwhals",
 ]
 
 dev = [

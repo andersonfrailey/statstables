@@ -80,5 +80,7 @@ SupportedModels = SupportedModelsClass(
         "linearmodels.panel.results.RandomEffectsResults": modeltables.LinearModelsData,
         "pyfixest.estimation.feols_.Feols": modeltables.PyFixestModel,
         "pyfixest.estimation.fepois_.Fepois": modeltables.PyFixestModel,
+        "pyfixest.estimation.models.feols_.Feols": modeltables.PyFixestModel,
+        "pyfixest.estimation.models.fepois_.Fepois": modeltables.PyFixestModel,
     }
 )
