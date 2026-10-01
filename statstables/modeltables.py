@@ -1,8 +1,9 @@
 # Tables that can be used to export model information
-import numpy as np
 from abc import ABC, abstractmethod
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
 
 # model stats that should always be formatted as integers
 INT_VARS = ["observations", "ngroups"]

@@ -1,10 +1,12 @@
 import math
-import warnings
-import statstables as st
 import textwrap
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import ClassVar, Optional
+
+import statstables as st
+
 from .utils import VALID_LINE_LOCATIONS, replace_latex
 
 
@@ -17,24 +19,29 @@ class Renderer(ABC):
         pass
 
     @abstractmethod
-    def generate_header(self) -> str: ...
+    def generate_header(self) -> str:
+        ...
 
     @abstractmethod
-    def generate_body(self) -> str: ...
+    def generate_body(self) -> str:
+        ...
 
     @abstractmethod
-    def generate_footer(self) -> str: ...
+    def generate_footer(self) -> str:
+        ...
 
     @abstractmethod
-    def _create_line(self, line) -> str: ...
+    def _create_line(self, line) -> str:
+        ...
 
     @abstractmethod
-    def _format_value(self, formatting_dict: dict, **kwargs) -> str: ...
+    def _format_value(self, formatting_dict: dict, **kwargs) -> str:
+        ...
 
 
 class LatexRenderer(Renderer):
     # LaTeX escape characters, borrowed from pandas.io.formats.latex and Stargazer
-    _ESCAPE_CHARS = [
+    _ESCAPE_CHARS: ClassVar = [
         ("\\", r"\textbackslash "),
         ("_", r"\_"),
         ("%", r"\%"),
@@ -48,7 +55,7 @@ class LatexRenderer(Renderer):
         (">", "$>$"),
         ("<", "$<$"),
     ]
-    ALIGNMENTS = {
+    ALIGNMENTS: ClassVar = {
         "l": "l",
         "c": "c",
         "r": "r",
@@ -56,7 +63,7 @@ class LatexRenderer(Renderer):
         "center": "c",
         "right": "r",
     }
-    TABULARX_ALIGNMENTS = {
+    TABULARX_ALIGNMENTS: ClassVar = {
         "l": r">{\raggedright\arraybackslash}",
         "c": r">{\centering\arraybackslash}",
         "r": r">{\raggedleft\arraybackslash}",
@@ -369,6 +376,15 @@ class HTMLRenderer(Renderer):
             if convert_latex:
                 caption = replace_latex(caption)
             header += f'    <tr><th  colspan="{self.ncolumns}" style="text-align:center">{caption}</th></tr>\n'
+        header += "    <tr>\n"
+        header += "    <td colspan='100%' style='border-top: 1px solid black;'></td>\n"
+        header += "    </tr>\n"
+        if self.table.table_params["double_top_rule"]:
+            header += "    <tr>\n"
+            header += (
+                "    <td colspan='100%' style='border-top: 1px solid black;'></td>\n"
+            )
+            header += "    </tr>\n"
         for row in self.table._multicolumns:
             header += "    <tr>\n"
             header += (
