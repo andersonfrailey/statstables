@@ -22,7 +22,7 @@ class ModelData(ABC):
         """
         Pull the parameter estimates from the model
         """
-        pass
+        ...
 
     def get_formatted_value(self, stat: str, sig_digits=3):
         """

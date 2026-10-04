@@ -1,23 +1,25 @@
-from typing import Any, Hashable
+from collections.abc import Hashable
+from typing import Any
+
 from statstables import (
-    tables,
-    renderers,
-    utils,
+    cellformatting,
     modeltables,
     parameters,
-    cellformatting,
+    renderers,
+    tables,
+    utils,
 )
 from statstables.parameters import STParams
 
 __all__ = [
     "STParams",
     "SupportedModels",
-    "tables",
-    "modeltables",
-    "renderers",
-    "utils",
-    "parameters",
     "cellformatting",
+    "modeltables",
+    "parameters",
+    "renderers",
+    "tables",
+    "utils",
 ]
 
 

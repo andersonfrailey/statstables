@@ -3,8 +3,10 @@ import math
 import numbers
 from abc import ABC, abstractmethod
 from collections import ChainMap, defaultdict
+from collections.abc import Hashable
 from pathlib import Path
-from typing import Callable, ClassVar, Hashable, overload
+from types import FunctionType
+from typing import ClassVar, overload
 
 import narwhals as nw
 import numpy as np
@@ -36,7 +38,7 @@ class Table(ABC):
     _index_labels: dict[str, str]
     _column_labels: dict[str, str]
     notes: list
-    _formatters: dict[tuple | str, Callable]
+    _formatters: dict[tuple | str, FunctionType]
     custom_lines: defaultdict[str | None, list]
     custom_tex_lines: defaultdict[str | None, list]
     custom_html_lines: defaultdict[str | None, list]
@@ -57,7 +59,7 @@ class Table(ABC):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
-        default_formatter: Callable | None = None,
+        default_formatter: FunctionType | None = None,
         longtable: bool = False,
         **kwargs,
     ):
@@ -1019,7 +1021,7 @@ class MeanDifferenceTable(Table):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
-        default_formatter: Callable | None = None,
+        default_formatter: FunctionType | None = None,
         longtable: bool = False,
         **kwargs,
     ):
@@ -1148,7 +1150,7 @@ class MeanDifferenceTable(Table):
         )  # may need to move this later if we make including the total mean optional
 
     @staticmethod
-    def _render(render_func: Callable):
+    def _render(render_func: FunctionType):
         def wrapper(self, *args, **kwargs):
             if self.table_params["show_n"]:
                 self.add_line(
@@ -1337,6 +1339,7 @@ class SummaryTable(GenericTable):
         if var_list is None:
             var_list = list(self.df.columns)
         summary_df = self.df[var_list].describe()
+        assert isinstance(summary_df, pd.DataFrame)
         super().__init__(summary_df, **kwargs)
 
     def reset_custom_features(self):
@@ -1361,7 +1364,7 @@ class ModelTable(Table):
     param_labels: list[str]
     # stats that get included in the table footer
     # configuration  is (name of the attribute, label, whether it has a p-value)
-    model_stats: ClassVar = [
+    model_stats: ClassVar[list[tuple[str, str | dict[str, str], bool]]] = [
         ("observations", "Observations", False),
         ("ngroups", "N. Groups", False),
         (
@@ -1431,7 +1434,7 @@ class ModelTable(Table):
         caption: str | None = None,
         index_name: str = "",
         formatters: dict | None = None,
-        default_formatter: Callable | None = None,
+        default_formatter: FunctionType | None = None,
         dependent_variable_name: str | None = None,
         longtable: bool = False,
         **kwargs,
@@ -1651,6 +1654,7 @@ class ModelTable(Table):
             _name = name
             if isinstance(name, dict):
                 _name = name[renderer]
+            assert isinstance(_name, str)
             if not getattr(self.table_params, f"show_{stat}"):
                 continue
             row = [self._format_value(f"{stat}_index", None, _name)]
@@ -1674,14 +1678,14 @@ class ModelTable(Table):
         return rows
 
     @staticmethod
-    def _render(render_func: Callable):
+    def _render(render_func: FunctionType):
         """
         Wrapper for the render function to add a p-value note formatted to fit
         the type of renderer being used.
 
         Parameters
         ----------
-        render_func : Callable
+        render_func : FunctionType
             The rendering function being wrapped
         """
 
@@ -2157,10 +2161,8 @@ class PanelTable:
         """
         Increment the label on each panel
         """
-        if self.enumerate_type is None:
-            pass
-        # roman numerals not implemented yet
-        elif self.enumerate_type == "roman":
+        # TODO: Implement roman numerals
+        if self.enumerate_type is None or self.enumerate_type == "roman":
             pass
         else:
             self.label_char = chr(ord(self.label_char) + 1)

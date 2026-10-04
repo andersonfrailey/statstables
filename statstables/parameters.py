@@ -4,6 +4,7 @@ Creates defult values for the tables
 
 from collections import ChainMap
 from difflib import get_close_matches
+from typing import ClassVar
 
 
 class PackageParams(dict):
@@ -75,25 +76,35 @@ INT_TABLE_PARAMS = {
 
 
 class TableParams(ChainMap):
-    VALID_ALIGNMENTS = ["l", "r", "c", "left", "right", "center", "^", "<", ">"]
+    VALID_ALIGNMENTS: ClassVar = [
+        "l",
+        "r",
+        "c",
+        "left",
+        "right",
+        "center",
+        "^",
+        "<",
+        ">",
+    ]
 
     def __init__(
         self, user_params: dict, default_params: dict = DEFAULT_TABLE_PARAMS
     ) -> None:
         super().__init__({}, user_params, default_params)
 
-    def __getitem__(self, name):
-        return super().__getitem__(name)
+    def __getitem__(self, key):
+        return super().__getitem__(key)
 
-    def __setitem__(self, name, value):
-        self._validate_param(name, value)
-        self.maps[0][name] = value
+    def __setitem__(self, key, value):
+        self._validate_param(key, value)
+        self.maps[0][key] = value
 
     def __getattr__(self, name):
         return self[name]
 
-    def __contains__(self, value):
-        return value in self.maps[0] | value in self.maps[1] | value in self.maps[2]
+    def __contains__(self, key):
+        return key in self.maps[0] or key in self.maps[1] or key in self.maps[2]
 
     def reset_params(self, restore_to_defaults=False):
         """
@@ -107,7 +118,7 @@ class TableParams(ChainMap):
 
     # Parameter validation
     def _validate_param(self, name: str, value: bool | str | int) -> None:
-        if name not in DEFAULT_TABLE_PARAMS.keys():
+        if name not in DEFAULT_TABLE_PARAMS:
             close_matches = get_close_matches(name, DEFAULT_TABLE_PARAMS.keys())
             raise AttributeError(
                 f"{name} is not a supported attribute. Close matches: {close_matches}"
@@ -153,7 +164,7 @@ class MeanDiffsTableParams(TableParams):
         super().__init__(user_params, DEFAULT_MEAN_DIFFS_TABLE_PARAMS)
 
     def _validate_param(self, name, value):
-        if name not in DEFAULT_MEAN_DIFFS_TABLE_PARAMS.keys():
+        if name not in DEFAULT_MEAN_DIFFS_TABLE_PARAMS:
             close_matches = get_close_matches(name, DEFAULT_TABLE_PARAMS.keys())
             raise AttributeError(
                 f"{name} is not a supported attribute. Close matches: {close_matches}"
@@ -219,7 +230,7 @@ class ModelTableParams(TableParams):
         super().__init__(user_params, DEFAULT_MODEL_TABLE_PARAMS)
 
     def _validate_param(self, name, value):
-        if name not in DEFAULT_MODEL_TABLE_PARAMS.keys():
+        if name not in DEFAULT_MODEL_TABLE_PARAMS:
             close_matches = get_close_matches(name, DEFAULT_TABLE_PARAMS.keys())
             raise AttributeError(
                 f"{name} is not a supported attribute. Close matches: {close_matches}"

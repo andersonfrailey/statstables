@@ -3,7 +3,7 @@ import textwrap
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 import statstables as st
 
@@ -340,7 +340,7 @@ class LatexRenderer(Renderer):
 
 
 class HTMLRenderer(Renderer):
-    ALIGNMENTS = {
+    ALIGNMENTS: ClassVar = {
         "l": "left",
         "c": "center",
         "r": "right",
@@ -526,7 +526,7 @@ class HTMLRenderer(Renderer):
         return out
 
     def _format_value(self, formatting_dict: dict, **kwargs) -> str:
-        cell = f"      <td"
+        cell = "      <td"
         if formatting_dict["class"]:
             _class = formatting_dict["class"]
             cell += f' class="{_class}"'
@@ -571,7 +571,7 @@ class ASCIIWidths:
 
 
 class ASCIIRenderer(Renderer):
-    ALIGNMENTS = {
+    ALIGNMENTS: ClassVar = {
         "l": "<",
         "c": "^",
         "r": ">",
@@ -608,7 +608,7 @@ class ASCIIRenderer(Renderer):
         self._border_len = widths._border_len
 
     def render(
-        self, convert_latex=True, table_widths: Optional[ASCIIWidths] = None
+        self, convert_latex=True, table_widths: ASCIIWidths | None = None
     ) -> str:
         if not table_widths:
             self._get_table_widths(convert_latex=convert_latex)
@@ -933,7 +933,7 @@ class ASCIIRenderer(Renderer):
 
 
 class TypstRenderer(Renderer):
-    ALIGNMENTS = {
+    ALIGNMENTS: ClassVar = {
         "l": "left",
         "c": "center",
         "r": "right",
@@ -1025,7 +1025,7 @@ class TypstRenderer(Renderer):
                 + "   table.hline(),\n"
             )
         if self.table.table_params["show_columns"] or self.table._multicolumns:
-            header += f"  table.header("
+            header += "  table.header("
         # multicolumns
         for row in self.table._multicolumns:
             header += (
