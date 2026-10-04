@@ -38,7 +38,7 @@ class Table(ABC):
     _index_labels: dict[str, str]
     _column_labels: dict[str, str]
     notes: list
-    _formatters: dict[tuple | str, FunctionType]
+    _formatters: dict[tuple | str | Hashable, FunctionType]
     custom_lines: defaultdict[str | None, list]
     custom_tex_lines: defaultdict[str | None, list]
     custom_html_lines: defaultdict[str | None, list]
@@ -320,7 +320,8 @@ class Table(ABC):
             try:
                 self.add_note(note=note[0], alignment=note[1], escape=note[2])
             except Exception as e:
-                raise ValueError(f"Note {i} yields error {e}")
+                print(f"Note {i} yields error {e}")
+                raise
 
     def remove_note(
         self,
@@ -842,13 +843,9 @@ class Table(ABC):
         if (_index, col) in self._formatters:
             formatter = self._formatters[(_index, col)]
         elif _index in self._formatters:
-            formatter = self._formatters.get(
-                _index, self._default_formatter  # type:ignore
-            )
+            formatter = self._formatters.get(_index, self._default_formatter)
         elif col in self._formatters:
-            formatter = self._formatters.get(
-                col, self._default_formatter  # type:ignore
-            )
+            formatter = self._formatters.get(col, self._default_formatter)
         else:
             formatter = self.default_formatter
         # for if the row is blank
@@ -1289,17 +1286,18 @@ class MeanDifferenceTable(Table):
         rows = []
         for _index, row in self.means.iterrows():
             sem_row = [self._format_value(f"{_index}_label", "_index", "")]
+            assert isinstance(_index, str)
             _row = [
                 self._format_value(
                     f"{_index}_label",
                     "_index",
-                    self._index_labels.get(_index, _index),  # type:ignore
+                    self._index_labels.get(_index, _index),
                 )
             ]
             for col, value in zip(row.index, row.values):
                 # pull standard error and p-value
                 try:
-                    se = self.sem.loc[_index, col]  # type:ignore
+                    se = self.sem.loc[_index, col]
                 except KeyError:
                     se = None
                 try:
@@ -1311,7 +1309,7 @@ class MeanDifferenceTable(Table):
                 )
                 if self.table_params["show_standard_errors"]:
                     try:
-                        se = self.sem.loc[_index, col]  # type:ignore
+                        se = self.sem.loc[_index, col]
                         formatted_se = copy.copy(formatted_val)
                         # formatted_se = self._format_value(_index, col, se)
                         formatted_se[

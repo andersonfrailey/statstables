@@ -55,7 +55,6 @@ def validate_alignments(alignment: str) -> None:
             f"Invalid alignment: {alignment}. "
             f"Valid alignments are: {VALID_ALIGNMENTS}"
         )
-    return None
 
 
 def replace_latex(line: str) -> str:
